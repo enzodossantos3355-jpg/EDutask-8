@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { whatsappService } from './whatsapp-service.js';
+import { firebaseService } from './src/lib/firebaseService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -317,6 +318,45 @@ class Database {
     }
     whatsappService.setConfig(this.whatsapp_config);
     whatsappService.initAutoConnect();
+    this.syncWithFirebase().catch((err) => {
+      console.warn('[Firebase Sync Error]', err);
+    });
+  }
+
+  async syncWithFirebase() {
+    try {
+      console.log('[Firebase] Sincronizando coleção tasks do Firestore...');
+      const tasks = await firebaseService.getAllTasks();
+      if (tasks && tasks.length > 0) {
+        tasks.forEach((t) => {
+          this.tasks.set(t.id, {
+            id: t.id,
+            title: t.title,
+            description: t.description,
+            subject: t.subject,
+            due_date: t.due_date,
+            points: t.points || 10,
+            assigned_to: t.assigned_to || [],
+            attachments: t.attachments || [],
+            admin_photos: t.admin_photos || [],
+            answer: t.answer || '',
+            answer_source: t.answer_source || '',
+            created_by: t.created_by || 'system',
+            created_at: t.created_at || new Date().toISOString(),
+          });
+        });
+        console.log(`[Firebase] ${tasks.length} tarefas sincronizadas do Firestore.`);
+        this.saveToDisk();
+      } else if (this.tasks.size > 0) {
+        console.log('[Firebase] Coleção tasks vazia. Enviando tarefas locais para o Firestore...');
+        for (const task of this.tasks.values()) {
+          await firebaseService.saveTask(task);
+        }
+        console.log('[Firebase] Tarefas locais enviadas para o Firestore com sucesso.');
+      }
+    } catch (e: any) {
+      console.warn('[Firebase] Falha na sincronização inicial:', e?.message || e);
+    }
   }
 
   saveToDisk() {
@@ -1167,6 +1207,11 @@ api.post('/tasks', requireAdmin, (req, res) => {
   db.tasks.set(id, newTask);
   db.saveToDisk();
 
+  // Sincronizar criação na coleção tasks do Firebase Firestore (assíncrono / não bloqueante)
+  firebaseService.saveTask(newTask).catch((err) => {
+    console.warn('[Firebase] Erro ao salvar tarefa no Firestore:', err);
+  });
+
   // Disparo automático e independente para os 2 grupos do WhatsApp configurados (não bloqueante)
   dispatchTaskWhatsAppNotifications(newTask).catch((err) => {
     console.error('[WhatsApp] Erro no disparo de tarefa:', err);
@@ -1348,6 +1393,12 @@ api.put('/tasks/:task_id', requireAdmin, (req, res) => {
   if (answer_source !== undefined) task.answer_source = answer_source.trim();
 
   db.saveToDisk();
+
+  // Sincronizar edição na coleção tasks do Firebase Firestore
+  firebaseService.saveTask(task).catch((err) => {
+    console.warn(`[Firebase] Erro ao atualizar tarefa ${task_id} no Firestore:`, err);
+  });
+
   res.json(buildTaskResponseForAdmin(task));
 });
 
@@ -1481,6 +1532,12 @@ api.delete('/tasks/:task_id', requireAdmin, (req, res) => {
   const { task_id } = req.params;
   db.tasks.delete(task_id);
   db.completions = db.completions.filter((c) => c.task_id !== task_id);
+  db.saveToDisk();
+
+  firebaseService.deleteTask(task_id).catch((err) => {
+    console.warn(`[Firebase] Erro ao remover tarefa ${task_id} do Firestore:`, err);
+  });
+
   res.json({ ok: true });
 });
 
@@ -1524,6 +1581,9 @@ function executeTaskCleanup(manual = false): { count: number; deleted_titles: st
     deletedTitles.push(`[${t.subject}] ${t.title}`);
     db.tasks.delete(t.id);
     db.completions = db.completions.filter((c) => c.task_id !== t.id);
+    firebaseService.deleteTask(t.id).catch((err) => {
+      console.warn(`[Firebase] Erro ao remover tarefa ${t.id} na limpeza:`, err);
+    });
   }
 
   db.task_cleanup_config.last_run_at = new Date().toISOString();
