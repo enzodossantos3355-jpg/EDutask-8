@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
@@ -213,12 +214,22 @@ interface ChatSession {
   updated_at: string;
 }
 
-const DATA_DIR = path.resolve(__dirname, 'data');
+const BASE_DIR = process.env.VERCEL || process.env.NODE_ENV === 'production' ? os.tmpdir() : __dirname;
+const DATA_DIR = path.resolve(BASE_DIR, 'data');
 const DB_FILE = path.resolve(DATA_DIR, 'db.json');
-const UPLOAD_DIR = path.resolve(__dirname, 'uploads');
+const UPLOAD_DIR = path.resolve(BASE_DIR, 'uploads');
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+} catch (e) {
+  console.warn('[Storage] Não foi possível criar DATA_DIR:', e);
+}
+
+try {
+  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+} catch (e) {
+  console.warn('[Storage] Não foi possível criar UPLOAD_DIR:', e);
+}
 
 class Database {
   users: Map<string, User> = new Map();

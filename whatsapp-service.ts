@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import makeWASocket, {
   useMultiFileAuthState,
@@ -14,7 +15,8 @@ import QRCode from 'qrcode';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const AUTH_DIR = path.resolve(__dirname, 'data/baileys_auth');
+const BASE_DIR = process.env.VERCEL || process.env.NODE_ENV === 'production' ? os.tmpdir() : __dirname;
+const AUTH_DIR = path.resolve(BASE_DIR, 'data/baileys_auth');
 
 export type WhatsAppConnectionStatus = 'disconnected' | 'connecting' | 'qr_ready' | 'connected';
 
