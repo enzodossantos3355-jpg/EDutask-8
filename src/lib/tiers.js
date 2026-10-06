@@ -4,9 +4,7 @@
  * - Os pontos obtidos através das tarefas são exclusivamente para comprar molduras na loja.
  * - O vencedor do mês é avaliado e escolhido pela Inteligência Artificial através de análise pedagógica mensal.
  */
-
 export const IS_TIER_SYSTEM_ENABLED = false;
-
 export const TIERS = [];
 
 export function getTier() {
@@ -20,4 +18,3 @@ export function getTierByName() {
 export function progressToNext() {
   return 0;
 }
-

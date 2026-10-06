@@ -1,5 +1,5 @@
 /**
- * Mapping effect id → CSS class (kept in sync with backend DEFAULT_EFFECTS).
+ * Mapping effect id -> CSS class (kept in sync with backend DEFAULT_EFFECTS).
  * A fresh call to /api/effects returns the definitive list; this map is a
  * lightweight fallback used by Avatar renders that don't fetch the catalog.
  */

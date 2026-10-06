@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone, LayoutGrid, CalendarDays, Sparkles, ShoppingBag, BarChart3, HelpCircle, Star, ExternalLink, Image as ImageIcon, Loader2, Copy, CheckCheck, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar as CalendarIcon, Paperclip, Check, BookOpen, Filter, Megaphone, LayoutGrid, CalendarDays, Sparkles, ShoppingBag, BarChart3, HelpCircle, Star, ExternalLink, Image as ImageIcon, Loader2, Copy, CheckCheck, FileText, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import api, { API, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAIStatus } from "@/context/AIStatusContext";
 import AppHeader from "@/components/AppHeader";
 import MyProfileBanner from "@/components/MyProfileBanner";
 import AnnouncementComments from "@/components/AnnouncementComments";
@@ -21,6 +22,7 @@ const colorFor = (s) => subjectColors[(s || "").length % subjectColors.length];
 
 export default function StudentDashboard() {
   const { user } = useAuth();
+  const { enabled: aiEnabled } = useAIStatus();
   const [tasks, setTasks] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -150,11 +152,33 @@ export default function StudentDashboard() {
             <BarChart3 className="w-4 h-4" /> Estatísticas & Líder IA
           </button>
           <button
-            onClick={() => setGlobalChatOpen(true)}
-            className="nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 bg-gradient-to-r from-violet-200 to-pink-200 hover:from-violet-300 hover:to-pink-300 sm:ml-auto"
+            onClick={() => {
+              if (!aiEnabled) {
+                toast.error("A Inteligência Artificial foi desativada temporariamente pelo administrador.");
+                return;
+              }
+              setGlobalChatOpen(true);
+            }}
+            disabled={!aiEnabled}
+            className={`nb-btn px-3.5 sm:px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 flex-shrink-0 sm:ml-auto ${
+              !aiEnabled
+                ? "bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed opacity-60"
+                : "bg-gradient-to-r from-violet-200 to-pink-200 hover:from-violet-300 hover:to-pink-300"
+            }`}
             data-testid="student-tab-chat"
+            title={!aiEnabled ? "IA desativada temporariamente" : "Tirar Dúvidas com IA"}
           >
-            <Sparkles className="w-4 h-4 text-violet-700" /> Tirar Dúvida
+            {!aiEnabled ? (
+              <>
+                <Lock className="w-4 h-4 text-neutral-500" />
+                <span>IA Bloqueada</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-violet-700" />
+                <span>Tirar Dúvida</span>
+              </>
+            )}
           </button>
         </div>
 
@@ -356,7 +380,11 @@ export default function StudentDashboard() {
           taskTitle={chatTask.title}
           sessionKey={`ai_chat_task_${chatTask.id}`}
           title={`Tira-dúvida: ${chatTask.title}`}
-          initialAssistantMessage={`Olá! Estou pronto para tirar suas dúvidas sobre "${chatTask.title}" (${chatTask.subject}). Tenho acesso ao enunciado e ao gabarito oficial. Me conta o que você gostaria de entender melhor!`}
+          initialAssistantMessage={
+            chatTask.has_ai_source || chatTask.answer_source || chatTask.answer
+              ? `Olá! Estou pronto para tirar suas dúvidas sobre "${chatTask.title}" (${chatTask.subject}). Tenho acesso ao enunciado e ao material oficial. Me conta o que você gostaria de entender melhor!`
+              : `Olá! Estou aqui para te ajudar a compreender os conceitos de "${chatTask.title}" (${chatTask.subject}). Como posso te orientar no raciocínio desta atividade?`
+          }
         />
       )}
 
@@ -382,6 +410,13 @@ function StatCard({ label, value, bg, testId }) {
 }
 
 function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
+  const { enabled: aiEnabled } = useAIStatus();
+  const hasAiSource = Boolean(
+    task.has_ai_source ||
+    (task.answer_source && task.answer_source.trim()) ||
+    (task.answer && task.answer.trim()) ||
+    (task.admin_photos && task.admin_photos.length > 0)
+  );
   const days = daysUntil(task.due_date);
   const priority = getPriority(task.due_date, task.completed);
   let dueLabel = formatDateBR(task.due_date);
@@ -420,21 +455,6 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
         </h3>
         <p className="text-xs sm:text-sm text-neutral-700 mb-3 whitespace-pre-wrap">{task.description}</p>
 
-        {/* Fotos do enunciado / livro disponibilizadas pelo professor */}
-        {task.admin_photos?.length > 0 && (
-          <div className="mb-3 space-y-1.5" data-testid={`task-photos-${task.id}`}>
-            <div className="text-[10px] font-bold text-violet-900 uppercase tracking-wide flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5 text-violet-700" />
-              Fotos do Enunciado / Livro ({task.admin_photos.length})
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {task.admin_photos.map((photo) => (
-                <TaskPhotoThumbnail key={photo.id} photo={photo} />
-              ))}
-            </div>
-          </div>
-        )}
-
         {task.attachments?.length > 0 && (
           <div className="mb-3 space-y-1.5">
             <div className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide">Anexos</div>
@@ -453,86 +473,44 @@ function StudentTaskCard({ task, onToggle, onAskDoubt, index }) {
           {task.completed ? "Desmarcar" : "Marcar como concluída"}
         </button>
 
-        <StudentAnswerSection task={task} />
+        {/* Answer section only if admin provided an AI source / answer / photos */}
+        {hasAiSource && <StudentAnswerSection task={task} aiEnabled={aiEnabled} />}
 
         <button
-          onClick={() => onAskDoubt(task)}
-          className="nb-btn w-full px-2.5 py-1.5 sm:py-2 flex items-center justify-center gap-1.5 bg-violet-100 hover:bg-violet-200 text-violet-950 text-xs font-bold"
+          onClick={() => {
+            if (!aiEnabled) {
+              toast.error("A Inteligência Artificial foi desativada temporariamente pelo administrador.");
+              return;
+            }
+            onAskDoubt(task);
+          }}
+          disabled={!aiEnabled}
+          className={`nb-btn w-full px-2.5 py-1.5 sm:py-2 flex items-center justify-center gap-1.5 text-xs font-bold ${
+            !aiEnabled
+              ? "bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed opacity-60"
+              : "bg-violet-100 hover:bg-violet-200 text-violet-950"
+          }`}
           data-testid={`ask-doubt-${task.id}`}
+          title={!aiEnabled ? "IA desativada pelo administrador" : "Tirar dúvida desta tarefa"}
         >
-          <Sparkles className="w-3.5 h-3.5 text-violet-600" />
-          Tirar dúvida desta tarefa (IA)
+          {!aiEnabled ? (
+            <>
+              <Lock className="w-3.5 h-3.5 text-neutral-500" />
+              <span>Tirar Dúvida (IA Bloqueada)</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+              <span>Tirar dúvida desta tarefa (IA)</span>
+            </>
+          )}
         </button>
       </div>
     </div>
   );
 }
 
-function TaskPhotoThumbnail({ photo }) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : "";
-  const url = `${API}/files/${photo.id}/download?auth=${encodeURIComponent(token || "")}`;
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setModalOpen(true)}
-        className="nb-card p-1.5 bg-violet-50 hover:bg-violet-100 flex items-center gap-2 text-left group overflow-hidden border border-black/30 transition-all hover:scale-[1.02]"
-        data-testid={`photo-thumbnail-${photo.id}`}
-        title="Clique para ampliar a foto"
-      >
-        <img
-          src={url}
-          alt={photo.original_filename || "Foto da tarefa"}
-          className="w-10 h-10 object-cover rounded border border-black/20 flex-shrink-0 bg-white"
-          loading="lazy"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold text-neutral-900 truncate group-hover:text-violet-950">
-            {photo.original_filename || "Foto"}
-          </p>
-          <span className="text-[9px] text-violet-700 font-semibold flex items-center gap-0.5">
-            <ExternalLink className="w-2.5 h-2.5" /> Ampliar foto
-          </span>
-        </div>
-      </button>
-
-      {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-150"
-          onClick={() => setModalOpen(false)}
-        >
-          <div
-            className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl border-3 border-black p-3 sm:p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-black/20">
-              <span className="text-xs font-bold text-neutral-800 truncate">
-                📷 {photo.original_filename || "Foto da tarefa"}
-              </span>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="nb-btn bg-white px-2 py-1 text-xs font-bold"
-              >
-                Fechar
-              </button>
-            </div>
-            <div className="overflow-auto max-h-[75vh] flex items-center justify-center bg-neutral-950/5 rounded-lg p-2">
-              <img
-                src={url}
-                alt={photo.original_filename}
-                className="max-h-[70vh] w-auto object-contain rounded"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function StudentAnswerSection({ task }) {
+function StudentAnswerSection({ task, aiEnabled = true }) {
   const [open, setOpen] = useState(false);
   const [selectedLength, setSelectedLength] = useState(task.generated_answer?.length || "medium");
   const [answer, setAnswer] = useState(task.generated_answer?.answer || task.answer || "");
@@ -546,6 +524,10 @@ function StudentAnswerSection({ task }) {
   };
 
   const handleGenerate = async (len = selectedLength) => {
+    if (!aiEnabled) {
+      toast.error("IA desativada temporariamente pelo administrador.");
+      return;
+    }
     setGenerating(true);
     try {
       const { data } = await api.post(`/tasks/${task.id}/generate-answer`, { length: len });
@@ -579,6 +561,20 @@ function StudentAnswerSection({ task }) {
       toast.error("Não foi possível copiar");
     }
   };
+
+  if (!aiEnabled) {
+    return (
+      <button
+        disabled={true}
+        className="nb-btn w-full px-3 py-2 flex items-center justify-center gap-2 bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed opacity-60 text-xs font-bold"
+        data-testid={`reveal-answer-disabled-${task.id}`}
+        title="Gabarito com IA desativado pelo administrador"
+      >
+        <Lock className="w-4 h-4 text-neutral-500" />
+        <span>Gabarito com IA (Bloqueado)</span>
+      </button>
+    );
+  }
 
   if (!open) {
     return (

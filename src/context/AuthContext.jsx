@@ -1,13 +1,19 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import api from "@/lib/api";
 
-const AuthContext = createContext(null);
+const AuthContext = createContext({
+  user: null,
+  loading: true,
+  login: async () => {},
+  logout: () => {},
+  refreshUser: async () => {},
+});
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchMe = useCallback(async () => {
+  const refreshUser = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
     if (!token) {
       setUser(null);
@@ -26,35 +32,31 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    fetchMe();
-  }, [fetchMe]);
+    refreshUser();
+  }, [refreshUser]);
 
   const login = async ({ user_id, email, password }) => {
     const { data } = await api.post("/auth/login", { user_id, email, password });
-    localStorage.setItem("auth_token", data.token);
-    setUser(data.user);
-    return data.user;
+    if (data.token) {
+      localStorage.setItem("auth_token", data.token);
+      setUser(data.user);
+    }
+    return data.user || data;
   };
 
-  const logout = async () => {
-    try {
-      await api.post("/auth/logout");
-    } catch {
-      // ignore
-    }
+  const logout = () => {
     localStorage.removeItem("auth_token");
     setUser(null);
+    api.post("/auth/logout").catch(() => {});
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refresh: fetchMe }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be inside AuthProvider");
-  return ctx;
+  return useContext(AuthContext);
 }

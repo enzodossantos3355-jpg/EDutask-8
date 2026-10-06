@@ -96,7 +96,6 @@ class WhatsAppService {
   private group2Name: string = '';
   private enabled: boolean = true;
   private isInitializing: boolean = false;
-
   private reconnectTimeout: any = null;
   private keepAliveInterval: any = null;
 
@@ -106,9 +105,6 @@ class WhatsAppService {
     }
   }
 
-  /**
-   * Auto-inicia conexão se houver credenciais salvas em disco (sessão prévia ativa)
-   */
   public initAutoConnect() {
     if (process.env.VERCEL) return;
     try {
@@ -133,7 +129,7 @@ class WhatsAppService {
     group_1_name?: string;
     group_2_jid?: string;
     group_2_name?: string;
-    group_jid?: string; // backwards compatibility
+    group_jid?: string;
     enabled?: boolean;
   }) {
     if (config.group1Jid !== undefined) this.group1Jid = (config.group1Jid || '').trim();
@@ -174,15 +170,12 @@ class WhatsAppService {
       this.lastError = 'WhatsApp não é executado no ambiente serverless Vercel.';
       return this.getStatus();
     }
-
     if (this.status === 'connected' && this.sock) {
       return this.getStatus();
     }
-
     if (this.isInitializing) {
       return this.getStatus();
     }
-
     this.isInitializing = true;
     this.status = 'connecting';
     this.lastError = null;
@@ -258,7 +251,6 @@ class WhatsAppService {
             clearInterval(this.keepAliveInterval);
           }
 
-          // Keep-alive heartbeat: envia presença periódica para manter socket ativo 24/7
           this.keepAliveInterval = setInterval(async () => {
             try {
               if (this.sock && this.status === 'connected') {
@@ -276,7 +268,7 @@ class WhatsAppService {
             name: sock.user?.name || `WhatsApp (+${phone})`,
             phone,
           };
-          console.log(`[WhatsApp] Baileys conectado com sucesso para ${phone} (Conexão Persistente Ativa)`);
+          console.log(`[WhatsApp] Baileys conectado com sucesso para ${phone}`);
         }
 
         if (connection === 'close') {
@@ -288,7 +280,6 @@ class WhatsAppService {
 
           const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
           console.log(`[WhatsApp] Conexão encerrada. Código: ${statusCode}, auto-reconectar: ${shouldReconnect}`);
 
           if (statusCode === DisconnectReason.loggedOut) {
@@ -300,11 +291,9 @@ class WhatsAppService {
             this.clearAuthFolder();
             this.sock = null;
           } else {
-            // Reconectar automaticamente e manter sessão ativa sem intervenção
             this.status = 'connecting';
             this.lastError = 'Reconectando ao WhatsApp...';
             this.sock = null;
-
             if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
             this.reconnectTimeout = setTimeout(() => {
               console.log('[WhatsApp] Tentando auto-reconexão...');
@@ -335,7 +324,6 @@ class WhatsAppService {
       clearInterval(this.keepAliveInterval);
       this.keepAliveInterval = null;
     }
-
     try {
       if (this.sock) {
         try {
@@ -390,11 +378,25 @@ class WhatsAppService {
     }
   }
 
-  /**
-   * Envia as notificações de tarefa para os 2 grupos configurados de forma independente.
-   * - Grupo 1 (Aviso Completo): Mensagem estruturada completa.
-   * - Grupo 2 (Foto com Enunciado): Foto anexada com legenda do enunciado (ou texto puro se não houver foto).
-   */
+  public async sendImage(jid: string, imageBuffer: Buffer, caption = '', mimetype = 'image/png'): Promise<boolean> {
+    if (this.status !== 'connected' || !this.sock || !jid) {
+      return false;
+    }
+    try {
+      const targetJid = jid.includes('@') ? jid : `${jid}@g.us`;
+      await this.sock.sendMessage(targetJid, {
+        image: imageBuffer,
+        caption: caption || undefined,
+        mimetype,
+      });
+      console.log(`[WhatsApp] Imagem enviada para ${targetJid}`);
+      return true;
+    } catch (err) {
+      console.error(`[WhatsApp] Falha ao enviar imagem para ${jid}:`, err);
+      return false;
+    }
+  }
+
   public async sendTaskNotifications(task: TaskNotificationPayload): Promise<{
     group1Sent: boolean;
     group2Sent: boolean;
@@ -410,7 +412,6 @@ class WhatsAppService {
       results.errors.push('WhatsApp não está conectado.');
       return results;
     }
-
     if (!this.enabled) {
       return results;
     }
@@ -430,9 +431,6 @@ class WhatsAppService {
 
     const formattedDate = formatDate(task.due_date);
 
-    // -------------------------------------------------------------------------
-    // DISPARO GRUPO 1: Aviso Completo
-    // -------------------------------------------------------------------------
     if (this.group1Jid && sendG1) {
       try {
         const target1 = this.group1Jid.includes('@') ? this.group1Jid : `${this.group1Jid}@g.us`;
@@ -457,9 +455,6 @@ class WhatsAppService {
       }
     }
 
-    // -------------------------------------------------------------------------
-    // DISPARO GRUPO 2: Foto com Enunciado (caption) ou Texto
-    // -------------------------------------------------------------------------
     if (this.group2Jid && sendG2) {
       try {
         const target2 = this.group2Jid.includes('@') ? this.group2Jid : `${this.group2Jid}@g.us`;
@@ -470,7 +465,6 @@ class WhatsAppService {
           `📝 *Enunciado:*\n${statementText}`;
 
         if (task.photo_buffer && task.photo_buffer.length > 0) {
-          // Enviar imagem com caption
           await this.sock.sendMessage(target2, {
             image: task.photo_buffer,
             caption: captionG2,
@@ -478,7 +472,6 @@ class WhatsAppService {
           });
           console.log(`[WhatsApp] Foto com enunciado enviada para Grupo 2 (${this.group2Jid})`);
         } else {
-          // Enviar apenas enunciado em formato de texto
           await this.sock.sendMessage(target2, { text: captionG2 });
           console.log(`[WhatsApp] Enunciado em texto enviado para Grupo 2 (${this.group2Jid})`);
         }
@@ -493,11 +486,6 @@ class WhatsAppService {
     return results;
   }
 
-  /**
-   * Envia as notificações de aviso para os 2 grupos configurados de forma independente.
-   * - Grupo 1 (Aviso Completo): Comunicado formatado completo.
-   * - Grupo 2 (Foto com Enunciado ou Texto): Foto com legenda ou texto.
-   */
   public async sendAnnouncementNotifications(ann: AnnouncementNotificationPayload): Promise<{
     group1Sent: boolean;
     group2Sent: boolean;
@@ -513,7 +501,6 @@ class WhatsAppService {
       results.errors.push('WhatsApp não está conectado.');
       return results;
     }
-
     if (!this.enabled) {
       return results;
     }
@@ -532,13 +519,12 @@ class WhatsAppService {
 
     const formattedDate = formatDate(ann.created_at);
 
-    // Grupo 1: Aviso Completo
     if (this.group1Jid && sendG1) {
       try {
         const target1 = this.group1Jid.includes('@') ? this.group1Jid : `${this.group1Jid}@g.us`;
         const recipients = ann.recipients_label ? `👥 *Destinatários:* ${ann.recipients_label}\n` : '';
         const msgG1 =
-          `📣 *NOVO AVISO NO EDUTASK*\n\n` +
+          `📢 *NOVO AVISO NO EDUTASK*\n\n` +
           `📌 *${ann.title}*\n` +
           `📅 *Data:* ${formattedDate}\n` +
           `${recipients}` +
@@ -552,12 +538,11 @@ class WhatsAppService {
       }
     }
 
-    // Grupo 2: Foto com Texto ou Texto puro
     if (this.group2Jid && sendG2) {
       try {
         const target2 = this.group2Jid.includes('@') ? this.group2Jid : `${this.group2Jid}@g.us`;
         const statementText = (ann.group2_caption || ann.message || '').trim();
-        const msgG2 = `📣 *${ann.title}*\n\n${statementText}`;
+        const msgG2 = `📢 *${ann.title}*\n\n${statementText}`;
 
         if (ann.photo_buffer && ann.photo_buffer.length > 0) {
           await this.sock.sendMessage(target2, {
@@ -577,11 +562,6 @@ class WhatsAppService {
     return results;
   }
 
-  /**
-   * Envia lembrete de tarefas para amanhã para os 2 grupos do WhatsApp.
-   * - Grupo 1: Resumo completo de todas as tarefas de amanhã.
-   * - Grupo 2: Foto com legenda/enunciado configurado.
-   */
   public async sendTomorrowReminder(payload: TomorrowReminderPayload): Promise<{
     group1Sent: boolean;
     group2Sent: boolean;
@@ -597,7 +577,6 @@ class WhatsAppService {
       results.errors.push('WhatsApp não está conectado.');
       return results;
     }
-
     if (!this.enabled) {
       return results;
     }
@@ -610,9 +589,6 @@ class WhatsAppService {
       return results;
     }
 
-    // -------------------------------------------------------------------------
-    // DISPARO GRUPO 1: Resumo Completo de Tarefas de Amanhã
-    // -------------------------------------------------------------------------
     if (this.group1Jid && sendG1) {
       try {
         const target1 = this.group1Jid.includes('@') ? this.group1Jid : `${this.group1Jid}@g.us`;
@@ -644,19 +620,13 @@ class WhatsAppService {
       }
     }
 
-    // -------------------------------------------------------------------------
-    // DISPARO GRUPO 2: Foto com Enunciado / Legenda Pré-Pronta
-    // -------------------------------------------------------------------------
     if (this.group2Jid && sendG2) {
       try {
         const target2 = this.group2Jid.includes('@') ? this.group2Jid : `${this.group2Jid}@g.us`;
         const tasksListG2 = tasks.map((t) => `• [${t.subject}] ${t.title}`).join('\n');
-
         let captionG2 = (
           payload.custom_caption_template ||
-          `🚨 *LEMBRETE: TAREFAS PARA AMANHÃ ({data_amanha})*\n\n` +
-          `Atenção turma! Temos {total_tarefas} tarefa(s) marcadas para amanhã:\n\n{lista_tarefas}\n\n` +
-          `👉 Acessem o Edutask para responder!`
+          `🚨 *LEMBRETE: TAREFAS PARA AMANHÃ ({data_amanha})*\n\nAtenção turma! Temos {total_tarefas} tarefa(s) marcadas para amanhã:\n\n{lista_tarefas}\n\n👉 Acessem o Edutask para responder!`
         ).trim();
 
         captionG2 = captionG2

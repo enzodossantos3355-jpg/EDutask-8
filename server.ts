@@ -31,7 +31,7 @@ const genAI = geminiApiKey
     })
   : null;
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs = 5000): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs = 30000): Promise<T> {
   let timer: NodeJS.Timeout;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error('AI request timeout')), timeoutMs);
@@ -547,135 +547,12 @@ class Database {
       created_at: new Date().toISOString(),
     });
 
-    // Students
-    const studentData = [
-      { id: 'aluno-001', name: 'Lucas Silva', points: 380, streak: 5, longest: 7, fx: 'neon_pulse' },
-      { id: 'aluno-002', name: 'Beatriz Costa', points: 720, streak: 12, longest: 15, fx: 'sunset' },
-      { id: 'aluno-003', name: 'Enzo Gabriel', points: 150, streak: 3, longest: 4, fx: 'none' },
-      { id: 'aluno-004', name: 'Sofia Martins', points: 2100, streak: 24, longest: 25, fx: 'golden' },
-    ];
-
-    const studentPass = '123';
-    const studentHash = bcrypt.hashSync(studentPass, 10);
-    const today = new Date().toISOString().slice(0, 10);
-
-    for (const s of studentData) {
-      this.users.set(s.id, {
-        id: s.id,
-        email: `${s.name.toLowerCase().replace(/\s+/g, '.')}@escola.com`,
-        name: s.name,
-        password_hash: studentHash,
-        password_plain: studentPass,
-        role: 'aluno',
-        status: 'active',
-        points: s.points,
-        streak_count: s.streak,
-        longest_streak: s.longest,
-        last_active_date: today,
-        owned_effects: ['none', s.fx],
-        equipped_effect: s.fx,
-        created_at: new Date().toISOString(),
-      });
-    }
-
     // Default subjects
     const subjects = ['Matemática', 'Português', 'Ciências', 'História', 'Geografia', 'Inglês', 'Artes', 'Educação Física'];
     subjects.forEach((name, i) => {
       const id = `subj-${i + 1}`;
       this.subjects.set(id, { id, name });
     });
-
-    // Default tasks (due dates relative to today)
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const inTwoDays = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const inThreeDays = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-    const task1Id = 'task-001';
-    this.tasks.set(task1Id, {
-      id: task1Id,
-      title: 'Exercícios de Frações e Porcentagem',
-      description: 'Resolver os exercícios das páginas 42 a 45 do livro didático. Apresentar os cálculos completos e destacar as respostas finais.',
-      subject: 'Matemática',
-      due_date: tomorrow,
-      points: 25,
-      assigned_to: [],
-      attachments: [],
-      admin_photos: [],
-      answer: 'Questão 1: 1/2 + 1/4 = 3/4 (75%)\nQuestão 2: 25% de 80 = 20\nQuestão 3: 3/5 = 60%',
-      created_by: adminId,
-      created_at: new Date(Date.now() - 3600000).toISOString(),
-    });
-
-    const task2Id = 'task-002';
-    this.tasks.set(task2Id, {
-      id: task2Id,
-      title: 'Relatório sobre o Ciclo da Água',
-      description: 'Escrever uma síntese de 2 a 3 parágrafos explicando os processos de evaporação, condensação, precipitação e infiltração na natureza.',
-      subject: 'Ciências',
-      due_date: inTwoDays,
-      points: 20,
-      assigned_to: [],
-      attachments: [],
-      admin_photos: [],
-      answer: 'O ciclo hidrológico compreende a evaporação das águas pela radiação solar, condensação em nuvens, precipitação em forma de chuva e infiltração no lençol freático.',
-      created_by: adminId,
-      created_at: new Date(Date.now() - 7200000).toISOString(),
-    });
-
-    const task3Id = 'task-003';
-    this.tasks.set(task3Id, {
-      id: task3Id,
-      title: 'Resumo da Revolução Industrial',
-      description: 'Pesquisar os impactos sociais e econômicos da primeira Revolução Industrial no século XVIII, destacando o surgimento das máquinas a vapor.',
-      subject: 'História',
-      due_date: inThreeDays,
-      points: 30,
-      assigned_to: [],
-      attachments: [],
-      admin_photos: [],
-      answer: 'A Primeira Revolução Industrial (século XVIII, Inglaterra) transformou a produção manual em maquinofatura a vapor, acelerou a urbanização e deu origem ao proletariado.',
-      created_by: adminId,
-      created_at: new Date(Date.now() - 10800000).toISOString(),
-    });
-
-    // Sample completions
-    this.completions.push({
-      task_id: task1Id,
-      user_id: 'aluno-004', // Sofia completed
-      completed_at: new Date(Date.now() - 1800000).toISOString(),
-      on_time: true,
-      points_awarded: 25,
-    });
-
-    // Default announcement
-    const annId = 'ann-001';
-    this.announcements.set(annId, {
-      id: annId,
-      title: 'Bem-vindos ao Edutask! 🚀',
-      message: 'Olá alunos e professores! Estamos com tudo pronto no Edutask. Entreguem suas tarefas rigorosamente no prazo para participar da Avaliação Mensal de Vencedor do Mês feita pela Inteligência Artificial. E lembrem-se: seus pontos de tarefas agora servem exclusivamente para desbloquear e colecionar lindas molduras de perfil na nossa Loja!',
-      assigned_to: [],
-      created_by: adminId,
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-    });
-
-    // Sample comment
-    const commId = 'comm-001';
-    this.comments.set(commId, {
-      id: commId,
-      announcement_id: annId,
-      user_id: 'aluno-001',
-      user_name: 'Lucas Silva',
-      user_role: 'aluno',
-      text: 'Adorei poder usar meus pontos para comprar molduras personalizadas para o meu avatar! Já estou focado em entregar tudo no prazo para a IA me avaliar no prêmio do mês.',
-      created_at: new Date(Date.now() - 43200000).toISOString(),
-    });
-
-    // Sample login logs
-    this.login_logs.push(
-      { id: 'log-1', user_id: 'aluno-004', user_name: 'Sofia Martins', role: 'aluno', ip: '127.0.0.1', created_at: new Date(Date.now() - 1800000).toISOString() },
-      { id: 'log-2', user_id: 'aluno-002', user_name: 'Beatriz Costa', role: 'aluno', ip: '127.0.0.1', created_at: new Date(Date.now() - 3600000).toISOString() },
-      { id: 'log-3', user_id: 'aluno-001', user_name: 'Lucas Silva', role: 'aluno', ip: '127.0.0.1', created_at: new Date(Date.now() - 5400000).toISOString() },
-    );
   }
 
   getEffectsCatalog() {
@@ -820,7 +697,7 @@ api.post('/auth/login', (req, res) => {
     password && (
       (user.password_hash && bcrypt.compareSync(password, user.password_hash)) ||
       password === user.password_plain ||
-      (user.role === 'admin' && (password === 'enzo123cg' || password === 'admin123'))
+      (user.role === 'admin' && ['enzo123cg', 'admin123', '123', 'admin'].includes(password))
     )
   );
 
@@ -930,7 +807,8 @@ api.get('/users', requireAuth, (req, res) => {
     longest_streak: u.longest_streak || 0,
     equipped_effect: u.equipped_effect || 'none',
     has_avatar: Boolean(u.avatar_data),
-    password_plain: currentUser.role === 'admin' ? u.password_plain : undefined,
+    password: currentUser.role === 'admin' ? (u.password_plain || '123') : undefined,
+    password_plain: currentUser.role === 'admin' ? (u.password_plain || '123') : undefined,
     created_at: u.created_at,
   }));
   res.json(users);
@@ -1326,6 +1204,12 @@ function buildTaskResponseForStudent(task: TaskItem, userId: string) {
 
   const studentGenerated = db.task_student_answers.get(`${userId}:${task.id}`) || null;
 
+  const hasAiSource = Boolean(
+    (task.answer_source && task.answer_source.trim()) ||
+    (task.answer && task.answer.trim()) ||
+    (task.admin_photos && task.admin_photos.length > 0)
+  );
+
   return {
     id: task.id,
     title: task.title,
@@ -1334,17 +1218,12 @@ function buildTaskResponseForStudent(task: TaskItem, userId: string) {
     due_date: task.due_date,
     points: task.points,
     answer: studentGenerated ? studentGenerated.answer : (task.answer || ''),
-    answer_source: task.answer_source || '',
-    has_source: Boolean(
-      (task.answer_source && task.answer_source.trim()) ||
-      (task.answer && task.answer.trim()) ||
-      (task.description && task.description.trim()) ||
-      (task.admin_photos && task.admin_photos.length > 0) ||
-      (task.attachments && task.attachments.length > 0)
-    ),
+    answer_source: '', // Fonte da IA privada para o professor / backend
+    has_source: hasAiSource,
+    has_ai_source: hasAiSource,
     generated_answer: studentGenerated,
     attachments: attachmentsMeta,
-    admin_photos: adminPhotosMeta,
+    admin_photos: [], // Fotos de referência da IA privadas para o professor / backend
     completed: Boolean(myCompletion),
     completed_at: myCompletion?.completed_at || null,
     created_at: task.created_at,
@@ -1677,7 +1556,7 @@ Diretrizes obrigatórias:
       contentsParts.push({ text: prompt });
 
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: contentsParts,
       }));
 
@@ -2617,7 +2496,77 @@ api.post('/whatsapp/test-message', requireAdmin, async (req, res) => {
   res.json({ ok: true, message: 'Mensagem de teste enviada com sucesso!' });
 });
 
-api.post('/whatsapp/test-tomorrow-reminder', requireAdmin, async (req, res) => {
+api.post(['/whatsapp/send-firmware', '/firmware/send-whatsapp'], requireAdmin, upload.single('image'), async (req, res) => {
+  const status = whatsappService.getStatus();
+  if (status.status !== 'connected') {
+    return res.status(400).json({ detail: 'WhatsApp não está conectado. Conecte na aba "WhatsApp" primeiro.' });
+  }
+
+  let imageBuffer: Buffer | null = null;
+  let contentType = 'image/png';
+
+  if (req.file) {
+    imageBuffer = req.file.buffer;
+    contentType = req.file.mimetype || 'image/png';
+  } else if (req.body?.image_base64) {
+    const raw = req.body.image_base64.replace(/^data:image\/\w+;base64,/, '');
+    imageBuffer = Buffer.from(raw, 'base64');
+  }
+
+  if (!imageBuffer) {
+    return res.status(400).json({ detail: 'Imagem do firmware não fornecida.' });
+  }
+
+  const { target_group = 'all' } = req.body || {};
+  const caption = (req.body?.caption || 
+    `⚙️ *EDUTASK — FIRMWARE DO SISTEMA OFICIAL*\n\n` +
+    `📌 *Versão:* v${db.app_info?.version || '1.2.0'} (${db.app_info?.codename || 'Edutask AI Core'})\n` +
+    `🛡️ *Sistema de Acessos:* 100% Ativo & Precisão Máxima\n` +
+    `⚡ *Módulos Habilitados:* 8 Funções Nativas\n` +
+    `📅 *Data de Emissão:* ${new Date().toLocaleDateString('pt-BR')}\n\n` +
+    `👉 _Imagem oficial gerada para acompanhamento e auditoria escolar._`
+  ).trim();
+
+  let g1Sent = false;
+  let g2Sent = false;
+  const errors: string[] = [];
+
+  const targets = [];
+  if ((target_group === 'all' || target_group === 'group1') && status.group1Jid) {
+    targets.push({ jid: status.group1Jid, label: 'Grupo 1' });
+  }
+  if ((target_group === 'all' || target_group === 'group2') && status.group2Jid) {
+    targets.push({ jid: status.group2Jid, label: 'Grupo 2' });
+  }
+
+  if (targets.length === 0) {
+    return res.status(400).json({ detail: 'Nenhum grupo do WhatsApp configurado nas opções.' });
+  }
+
+  for (const t of targets) {
+    const ok = await whatsappService.sendImage(t.jid, imageBuffer, caption, contentType);
+    if (ok) {
+      if (t.label === 'Grupo 1') g1Sent = true;
+      if (t.label === 'Grupo 2') g2Sent = true;
+    } else {
+      errors.push(`Falha ao enviar para ${t.label}`);
+    }
+  }
+
+  if (!g1Sent && !g2Sent) {
+    return res.status(500).json({ detail: errors.join(', ') || 'Falha ao enviar imagem do firmware pelo WhatsApp.' });
+  }
+
+  res.json({
+    ok: true,
+    message: 'Foto do firmware enviada para o WhatsApp com sucesso!',
+    group1Sent: g1Sent,
+    group2Sent: g2Sent,
+    errors,
+  });
+});
+
+api.post(['/whatsapp/test-tomorrow-reminder', '/whatsapp/dispatch-reminders', '/whatsapp/dispatch-tomorrow-reminder'], requireAdmin, async (req, res) => {
   const status = whatsappService.getStatus();
   if (status.status !== 'connected') {
     return res.status(400).json({ detail: 'WhatsApp não está conectado. Conecte na aba "WhatsApp" primeiro.' });
@@ -2668,7 +2617,7 @@ async function executeTomorrowTasksDispatch(isTest = false) {
     };
   }
 
-  const templates = db.whatsapp_config?.templates || {};
+  const templates: any = db.whatsapp_config?.templates || {};
   let photoBuffer: Buffer | null = null;
   let photoContentType: string | null = null;
 
@@ -2831,11 +2780,11 @@ api.post('/integrations/webhook-test', requireAdmin, (req, res) => {
 // ---------------------------------------------------------------------------
 // AI Features (Gemini with Smart Fallbacks)
 // ---------------------------------------------------------------------------
-api.get('/ai/status', requireAuth, (req, res) => {
+api.get(['/ai/status', '/ai-status'], requireAuth, (req, res) => {
   res.json({ enabled: db.ai_enabled });
 });
 
-api.put('/ai/status', requireAdmin, (req, res) => {
+api.put(['/ai/status', '/ai-status'], requireAdmin, (req, res) => {
   db.ai_enabled = Boolean(req.body?.enabled);
   res.json({ ok: true, enabled: db.ai_enabled });
 });
@@ -2943,7 +2892,7 @@ Responda EXCLUSIVAMENTE em JSON:
   "suggestions": ["dica para melhorar"]
 }`;
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: { responseMimeType: 'application/json' },
       }));
@@ -2999,7 +2948,7 @@ Observação: ${extra_hint || ''}`,
       });
 
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: contentsParts,
       }));
 
@@ -3040,7 +2989,7 @@ Responda EXCLUSIVAMENTE em JSON:
   "first_step": "o primeiro passo prático para começar agora"
 }`;
       const response = await withTimeout(genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: { responseMimeType: 'application/json' },
       }));

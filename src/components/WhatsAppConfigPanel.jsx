@@ -182,9 +182,6 @@ export default function WhatsAppConfigPanel() {
   };
 
   const handleDisconnect = async () => {
-    if (!window.confirm("Deseja realmente desconectar o WhatsApp? A sessão salva será encerrada.")) {
-      return;
-    }
     setDisconnecting(true);
     try {
       const { data } = await api.post("/whatsapp/disconnect");

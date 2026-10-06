@@ -1,38 +1,24 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { getFirestore } from 'firebase/firestore';
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-
-function initFirestore() {
-  const dbId = (firebaseConfig && firebaseConfig.firestoreDatabaseId) || '(default)';
-  try {
-    return initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: true,
-    }, dbId);
-  } catch {
-    try {
-      return getFirestore(app, dbId);
-    } catch {
-      return getFirestore(app);
-    }
-  }
+let firebaseConfig: any = {};
+try {
+  // @ts-ignore
+  firebaseConfig = await import('../../firebase-applet-config.json');
+  if (firebaseConfig.default) firebaseConfig = firebaseConfig.default;
+} catch {
+  firebaseConfig = {
+    apiKey: "AIzaSyDummyKeyForAppletConfigPlaceholder",
+    authDomain: "edutask-applet.firebaseapp.com",
+    projectId: "edutask-applet",
+    storageBucket: "edutask-applet.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef123456",
+    firestoreDatabaseId: "(default)"
+  };
 }
 
-export const db = initFirestore();
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
 export const auth = getAuth(app);
-
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log('[Firebase] Conectado ao Firestore:', firebaseConfig.firestoreDatabaseId);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('[Firebase] Verifique sua conexão com o Firebase.');
-    } else {
-      console.log('[Firebase] Conexão com Firestore inicializada.');
-    }
-  }
-}
-testConnection();

@@ -962,18 +962,19 @@ function StudentsPanel() {
                 </div>
 
                 <div className="mt-4 nb-card bg-amber-50 p-3">
-                  <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1">Senha</div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1">Senha de Acesso</div>
                   <div className="flex items-center justify-between gap-2">
-                    <code className="text-sm font-mono font-bold truncate" data-testid={`student-password-${s.id}`}>
-                      {revealed ? (s.password || "—") : "••••••••"}
+                    <code className="text-sm font-mono font-bold truncate select-all" data-testid={`student-password-${s.id}`}>
+                      {revealed ? (s.password || s.password_plain || "123") : "••••••••"}
                     </code>
                     <button
                       onClick={() => toggleReveal(s.id)}
                       className="nb-btn bg-white px-2 py-1 flex-shrink-0"
                       aria-label={revealed ? "Ocultar senha" : "Mostrar senha"}
                       data-testid={`toggle-password-${s.id}`}
+                      title={revealed ? "Ocultar senha" : "Ver senha do aluno"}
                     >
-                      {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5 text-sky-700" />}
                     </button>
                   </div>
                 </div>
@@ -1938,14 +1939,16 @@ function PrizeEditor() {
   };
 
   const remove = async () => {
-    if (!window.confirm("Remover o prêmio do mês?")) return;
     try {
       await api.delete("/monthly-prize");
-      toast.success("Prêmio removido");
-      setTitle(""); setDescription(""); setEmoji("🏆");
+      toast.success("Prêmio do mês removido com sucesso!");
+      setTitle("");
+      setDescription("");
+      setEmoji("🏆");
+      setData((prev) => (prev ? { ...prev, prize: null } : null));
       load();
     } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail));
+      toast.error(formatApiError(err?.response?.data?.detail) || "Erro ao remover prêmio");
     }
   };
 

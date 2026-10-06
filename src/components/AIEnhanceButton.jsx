@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Lock } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { useAIStatus } from "@/context/AIStatusContext";
 
 /**
- * Small "✨ Melhorar com IA" button. Calls a backend endpoint and passes result
- * back to parent via onResult(data). Shows loading state. Hidden if AI disabled.
+ * "Melhorar com IA" button.
+ * When AI is disabled, appears visually locked/disabled and unclickable.
  */
 export default function AIEnhanceButton({
   endpoint,
@@ -19,7 +19,21 @@ export default function AIEnhanceButton({
 }) {
   const [loading, setLoading] = useState(false);
   const { enabled } = useAIStatus();
-  if (!enabled) return null;
+
+  if (!enabled) {
+    return (
+      <button
+        type="button"
+        disabled={true}
+        className={`nb-btn bg-neutral-200 text-neutral-500 border-neutral-400 cursor-not-allowed opacity-60 px-3 py-1.5 text-xs flex items-center gap-1.5 ${className}`}
+        data-testid={testId || "ai-enhance-button-disabled"}
+        title="IA desativada temporariamente pelo administrador"
+      >
+        <Lock className="w-3.5 h-3.5 text-neutral-500" strokeWidth={2.5} />
+        <span>{label} (Bloqueado)</span>
+      </button>
+    );
+  }
 
   const run = async () => {
     setLoading(true);

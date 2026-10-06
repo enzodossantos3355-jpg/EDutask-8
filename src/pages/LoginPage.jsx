@@ -61,7 +61,6 @@ export default function LoginPage() {
   };
 
   const handleProfileClick = (p) => {
-    const meta = STATUS_META[p.status] || STATUS_META.active;
     if (p.status === "maintenance") {
       toast.warning("Este perfil está em manutenção. Fale com o administrador.");
       return;
@@ -96,7 +95,7 @@ export default function LoginPage() {
               <span className="font-heading font-bold tracking-wide text-sm">Tarefas de Casa Escolares</span>
             </div>
             <h1 className="font-heading font-black text-5xl xl:text-6xl leading-[1.05] text-black drop-shadow-[2px_2px_0_rgba(255,255,255,0.6)]">
-              A lição de hoje, organizada para amanhã.
+              A lição de hoje, organizada para amanhã
             </h1>
           </div>
           <div className="flex gap-3">
@@ -124,7 +123,6 @@ export default function LoginPage() {
             <div className="nb-fade-in">
               <h2 className="font-heading font-black text-3xl sm:text-4xl mb-2">Quem está usando?</h2>
               <p className="text-neutral-600 mb-6 sm:mb-8">Escolha seu perfil para continuar.</p>
-
               {loading ? (
                 <p className="text-neutral-500">Carregando perfis...</p>
               ) : profiles.length === 0 ? (

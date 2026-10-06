@@ -16,19 +16,9 @@ import {
   FileText,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
+import { formatDateBR } from "@/lib/priority";
 
 const API = import.meta.env.VITE_API_BASE_URL || "/api";
-
-function formatDateBR(isoStr) {
-  if (!isoStr) return "";
-  try {
-    const [y, m, d] = isoStr.split("-");
-    if (y && m && d) return `${d}/${m}/${y}`;
-    return new Date(isoStr).toLocaleDateString("pt-BR");
-  } catch {
-    return isoStr;
-  }
-}
 
 export default function WhatsAppDispatchDialog({
   open,
