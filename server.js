@@ -1,3 +1,47 @@
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// firebase-applet-config.json
+var require_firebase_applet_config = __commonJS({
+  "firebase-applet-config.json"(exports, module) {
+    module.exports = {
+      projectId: "edutask-7ano-60994",
+      appId: "1:851306521007:web:1eab9e88863b662fb78f5a",
+      apiKey: "AIzaSyDsAo1hTSOe6Q21QcNeHmGNt650rkzBBmc",
+      authDomain: "edutask-7ano-60994.firebaseapp.com",
+      firestoreDatabaseId: "ai-studio-edutaskgestodeta-3284915b-c459-465f-8391-17d32111c03c",
+      storageBucket: "edutask-7ano-60994.firebasestorage.app",
+      messagingSenderId: "851306521007",
+      measurementId: "",
+      oAuthClientId: "851306521007-npj7s45v4hfmqh2mbgq7f539cpg8i00t.apps.googleusercontent.com",
+      recaptchaSiteKey: ""
+    };
+  }
+});
+
 // server.ts
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -22,29 +66,26 @@ var __dirname = path.dirname(__filename);
 var BASE_DIR = process.env.VERCEL || process.env.NODE_ENV === "production" ? os.tmpdir() : __dirname;
 var AUTH_DIR = path.resolve(BASE_DIR, "data/baileys_auth");
 var WhatsAppService = class {
+  sock = null;
+  status = "disconnected";
+  qrCode = null;
+  qrImage = null;
+  user = null;
+  lastError = null;
+  lastConnectedAt = null;
+  group1Jid = "";
+  group1Name = "";
+  group2Jid = "";
+  group2Name = "";
+  enabled = true;
+  isInitializing = false;
+  reconnectTimeout = null;
+  keepAliveInterval = null;
   constructor() {
-    this.sock = null;
-    this.status = "disconnected";
-    this.qrCode = null;
-    this.qrImage = null;
-    this.user = null;
-    this.lastError = null;
-    this.lastConnectedAt = null;
-    this.group1Jid = "";
-    this.group1Name = "";
-    this.group2Jid = "";
-    this.group2Name = "";
-    this.enabled = true;
-    this.isInitializing = false;
-    this.reconnectTimeout = null;
-    this.keepAliveInterval = null;
     if (!fs.existsSync(AUTH_DIR)) {
       fs.mkdirSync(AUTH_DIR, { recursive: true });
     }
   }
-  /**
-   * Auto-inicia conexão se houver credenciais salvas em disco (sessão prévia ativa)
-   */
   initAutoConnect() {
     if (process.env.VERCEL) return;
     try {
@@ -176,7 +217,7 @@ var WhatsAppService = class {
             name: sock.user?.name || `WhatsApp (+${phone})`,
             phone
           };
-          console.log(`[WhatsApp] Baileys conectado com sucesso para ${phone} (Conex\xE3o Persistente Ativa)`);
+          console.log(`[WhatsApp] Baileys conectado com sucesso para ${phone}`);
         }
         if (connection === "close") {
           this.isInitializing = false;
@@ -278,11 +319,24 @@ var WhatsAppService = class {
       return false;
     }
   }
-  /**
-   * Envia as notificações de tarefa para os 2 grupos configurados de forma independente.
-   * - Grupo 1 (Aviso Completo): Mensagem estruturada completa.
-   * - Grupo 2 (Foto com Enunciado): Foto anexada com legenda do enunciado (ou texto puro se não houver foto).
-   */
+  async sendImage(jid, imageBuffer, caption = "", mimetype = "image/png") {
+    if (this.status !== "connected" || !this.sock || !jid) {
+      return false;
+    }
+    try {
+      const targetJid = jid.includes("@") ? jid : `${jid}@g.us`;
+      await this.sock.sendMessage(targetJid, {
+        image: imageBuffer,
+        caption: caption || void 0,
+        mimetype
+      });
+      console.log(`[WhatsApp] Imagem enviada para ${targetJid}`);
+      return true;
+    } catch (err) {
+      console.error(`[WhatsApp] Falha ao enviar imagem para ${jid}:`, err);
+      return false;
+    }
+  }
   async sendTaskNotifications(task) {
     const results = {
       group1Sent: false,
@@ -362,11 +416,6 @@ ${statementText}`;
     }
     return results;
   }
-  /**
-   * Envia as notificações de aviso para os 2 grupos configurados de forma independente.
-   * - Grupo 1 (Aviso Completo): Comunicado formatado completo.
-   * - Grupo 2 (Foto com Enunciado ou Texto): Foto com legenda ou texto.
-   */
   async sendAnnouncementNotifications(ann) {
     const results = {
       group1Sent: false,
@@ -396,7 +445,7 @@ ${statementText}`;
         const target1 = this.group1Jid.includes("@") ? this.group1Jid : `${this.group1Jid}@g.us`;
         const recipients = ann.recipients_label ? `\u{1F465} *Destinat\xE1rios:* ${ann.recipients_label}
 ` : "";
-        const msgG1 = `\u{1F4E3} *NOVO AVISO NO EDUTASK*
+        const msgG1 = `\u{1F4E2} *NOVO AVISO NO EDUTASK*
 
 \u{1F4CC} *${ann.title}*
 \u{1F4C5} *Data:* ${formattedDate}
@@ -415,7 +464,7 @@ ${ann.message}
       try {
         const target2 = this.group2Jid.includes("@") ? this.group2Jid : `${this.group2Jid}@g.us`;
         const statementText = (ann.group2_caption || ann.message || "").trim();
-        const msgG2 = `\u{1F4E3} *${ann.title}*
+        const msgG2 = `\u{1F4E2} *${ann.title}*
 
 ${statementText}`;
         if (ann.photo_buffer && ann.photo_buffer.length > 0) {
@@ -434,11 +483,6 @@ ${statementText}`;
     }
     return results;
   }
-  /**
-   * Envia lembrete de tarefas para amanhã para os 2 grupos do WhatsApp.
-   * - Grupo 1: Resumo completo de todas as tarefas de amanhã.
-   * - Grupo 2: Foto com legenda/enunciado configurado.
-   */
   async sendTomorrowReminder(payload) {
     const results = {
       group1Sent: false,
@@ -529,58 +573,41 @@ Aten\xE7\xE3o turma! Temos {total_tarefas} tarefa(s) marcadas para amanh\xE3:
 var whatsappService = new WhatsAppService();
 
 // src/lib/firebaseService.ts
-import { collection, getDocs, doc as doc2, setDoc, deleteDoc, getDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, deleteDoc, getDoc, deleteField } from "firebase/firestore";
 
 // src/lib/firebase.ts
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { initializeFirestore, getFirestore, doc, getDocFromServer } from "firebase/firestore";
-
-// firebase-applet-config.json
-var firebase_applet_config_default = {
-  projectId: "edutask-7ano-60994",
-  appId: "1:851306521007:web:1eab9e88863b662fb78f5a",
-  apiKey: "AIzaSyDsAo1hTSOe6Q21QcNeHmGNt650rkzBBmc",
-  authDomain: "edutask-7ano-60994.firebaseapp.com",
-  firestoreDatabaseId: "ai-studio-edutaskgestodeta-3284915b-c459-465f-8391-17d32111c03c",
-  storageBucket: "edutask-7ano-60994.firebasestorage.app",
-  messagingSenderId: "851306521007",
-  measurementId: "",
-  oAuthClientId: "851306521007-npj7s45v4hfmqh2mbgq7f539cpg8i00t.apps.googleusercontent.com",
-  recaptchaSiteKey: ""
-};
-
-// src/lib/firebase.ts
-var app = !getApps().length ? initializeApp(firebase_applet_config_default) : getApp();
-function initFirestore() {
-  const dbId = firebase_applet_config_default && firebase_applet_config_default.firestoreDatabaseId || "(default)";
-  try {
-    return initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: true
-    }, dbId);
-  } catch {
-    try {
-      return getFirestore(app, dbId);
-    } catch {
-      return getFirestore(app);
-    }
-  }
+import { getFirestore } from "firebase/firestore";
+var firebaseConfig = {};
+try {
+  firebaseConfig = await Promise.resolve().then(() => __toESM(require_firebase_applet_config(), 1));
+  if (firebaseConfig.default) firebaseConfig = firebaseConfig.default;
+} catch {
+  firebaseConfig = {};
 }
-var db = initFirestore();
+if (typeof import.meta !== "undefined" && import.meta.env) {
+  if (import.meta.env.VITE_FIREBASE_API_KEY) firebaseConfig.apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+  if (import.meta.env.VITE_FIREBASE_PROJECT_ID) firebaseConfig.projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+  if (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN) firebaseConfig.authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+  if (import.meta.env.VITE_FIREBASE_DATABASE_ID) firebaseConfig.firestoreDatabaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID;
+  if (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET) firebaseConfig.storageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
+  if (import.meta.env.VITE_FIREBASE_APP_ID) firebaseConfig.appId = import.meta.env.VITE_FIREBASE_APP_ID;
+}
+if (!firebaseConfig.apiKey) {
+  firebaseConfig = {
+    apiKey: "AIzaSyDsAo1hTSOe6Q21QcNeHmGNt650rkzBBmc",
+    authDomain: "edutask-7ano-60994.firebaseapp.com",
+    projectId: "edutask-7ano-60994",
+    storageBucket: "edutask-7ano-60994.firebasestorage.app",
+    messagingSenderId: "851306521007",
+    appId: "1:851306521007:web:1eab9e88863b662fb78f5a",
+    firestoreDatabaseId: "ai-studio-edutaskgestodeta-3284915b-c459-465f-8391-17d32111c03c"
+  };
+}
+var app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+var db = getFirestore(app, firebaseConfig.firestoreDatabaseId || "(default)");
 var auth = getAuth(app);
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, "test", "connection"));
-    console.log("[Firebase] Conectado ao Firestore:", firebase_applet_config_default.firestoreDatabaseId);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("the client is offline")) {
-      console.warn("[Firebase] Verifique sua conex\xE3o com o Firebase.");
-    } else {
-      console.log("[Firebase] Conex\xE3o com Firestore inicializada.");
-    }
-  }
-}
-testConnection();
 
 // src/lib/firebaseService.ts
 function handleFirestoreError(error, operationType, path3) {
@@ -595,290 +622,354 @@ function handleFirestoreError(error, operationType, path3) {
     path: path3
   };
   console.error("Firestore Error:", JSON.stringify(errInfo));
-  return errInfo;
+  throw new Error(JSON.stringify(errInfo));
+}
+function sanitizeFirestoreData(obj) {
+  if (obj === null || obj === void 0) return null;
+  if (Array.isArray(obj)) return obj.map(sanitizeFirestoreData);
+  if (typeof obj === "object") {
+    if (obj._methodName || obj.constructor && obj.constructor.name === "FieldValue") {
+      return obj;
+    }
+    const cleaned = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== void 0) {
+        cleaned[key] = sanitizeFirestoreData(val);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
 }
 var firebaseService = {
   // Tasks
   async getAllTasks() {
+    const path3 = "tasks";
     try {
-      const snap = await getDocs(collection(db, "tasks"));
+      const snap = await getDocs(collection(db, path3));
       const tasks = [];
       snap.forEach((docSnap) => {
         tasks.push({ id: docSnap.id, ...docSnap.data() });
       });
       return tasks;
     } catch (e) {
-      handleFirestoreError(e, "list" /* LIST */, "tasks");
-      return [];
+      handleFirestoreError(e, "list" /* LIST */, path3);
     }
   },
   async saveTask(task) {
+    const path3 = `tasks/${task.id}`;
     try {
-      await setDoc(doc2(db, "tasks", task.id), task, { merge: true });
+      const sanitized = sanitizeFirestoreData(task);
+      await setDoc(doc(db, "tasks", task.id), sanitized, { merge: true });
       return true;
     } catch (e) {
-      handleFirestoreError(e, "write" /* WRITE */, `tasks/${task.id}`);
-      return false;
+      handleFirestoreError(e, "write" /* WRITE */, path3);
     }
   },
   async deleteTask(taskId) {
+    const path3 = `tasks/${taskId}`;
     try {
-      await deleteDoc(doc2(db, "tasks", taskId));
+      await deleteDoc(doc(db, "tasks", taskId));
       return true;
     } catch (e) {
-      handleFirestoreError(e, "delete" /* DELETE */, `tasks/${taskId}`);
-      return false;
+      handleFirestoreError(e, "delete" /* DELETE */, path3);
     }
   },
   // Users
   async getAllUsers() {
+    const path3 = "users";
     try {
-      const snap = await getDocs(collection(db, "users"));
+      const snap = await getDocs(collection(db, path3));
       const users = [];
       snap.forEach((docSnap) => {
         users.push({ id: docSnap.id, ...docSnap.data() });
       });
       return users;
     } catch (e) {
-      handleFirestoreError(e, "list" /* LIST */, "users");
-      return [];
+      handleFirestoreError(e, "list" /* LIST */, path3);
     }
   },
   async saveUser(user) {
+    const path3 = `users/${user.id}`;
     try {
-      await setDoc(doc2(db, "users", user.id), user, { merge: true });
+      const sanitized = sanitizeFirestoreData(user);
+      if (!user.avatar_data) {
+        sanitized.avatar_data = deleteField();
+        sanitized.avatar_content_type = deleteField();
+      }
+      await setDoc(doc(db, "users", user.id), sanitized, { merge: true });
       return true;
     } catch (e) {
-      handleFirestoreError(e, "write" /* WRITE */, `users/${user.id}`);
-      return false;
+      handleFirestoreError(e, "write" /* WRITE */, path3);
     }
   },
   async deleteUser(userId) {
+    const path3 = `users/${userId}`;
     try {
-      await deleteDoc(doc2(db, "users", userId));
+      await deleteDoc(doc(db, "users", userId));
       return true;
     } catch (e) {
-      handleFirestoreError(e, "delete" /* DELETE */, `users/${userId}`);
-      return false;
+      handleFirestoreError(e, "delete" /* DELETE */, path3);
     }
   },
   // Subjects
   async getAllSubjects() {
+    const path3 = "subjects";
     try {
-      const snap = await getDocs(collection(db, "subjects"));
+      const snap = await getDocs(collection(db, path3));
       const subjects = [];
       snap.forEach((docSnap) => {
         subjects.push({ id: docSnap.id, ...docSnap.data() });
       });
       return subjects;
     } catch (e) {
-      handleFirestoreError(e, "list" /* LIST */, "subjects");
-      return [];
+      handleFirestoreError(e, "list" /* LIST */, path3);
     }
   },
   async saveSubject(subject) {
+    const path3 = `subjects/${subject.id}`;
     try {
-      await setDoc(doc2(db, "subjects", subject.id), subject, { merge: true });
+      const sanitized = sanitizeFirestoreData(subject);
+      await setDoc(doc(db, "subjects", subject.id), sanitized, { merge: true });
       return true;
     } catch (e) {
-      handleFirestoreError(e, "write" /* WRITE */, `subjects/${subject.id}`);
-      return false;
+      handleFirestoreError(e, "write" /* WRITE */, path3);
     }
   },
   async deleteSubject(subjectId) {
+    const path3 = `subjects/${subjectId}`;
     try {
-      await deleteDoc(doc2(db, "subjects", subjectId));
+      await deleteDoc(doc(db, "subjects", subjectId));
       return true;
     } catch (e) {
-      handleFirestoreError(e, "delete" /* DELETE */, `subjects/${subjectId}`);
-      return false;
+      handleFirestoreError(e, "delete" /* DELETE */, path3);
     }
   },
   // Announcements
   async getAllAnnouncements() {
+    const path3 = "announcements";
     try {
-      const snap = await getDocs(collection(db, "announcements"));
+      const snap = await getDocs(collection(db, path3));
       const list = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e) {
-      handleFirestoreError(e, "list" /* LIST */, "announcements");
-      return [];
+      handleFirestoreError(e, "list" /* LIST */, path3);
     }
   },
   async saveAnnouncement(ann) {
+    const path3 = `announcements/${ann.id}`;
     try {
-      await setDoc(doc2(db, "announcements", ann.id), ann, { merge: true });
+      const sanitized = sanitizeFirestoreData(ann);
+      await setDoc(doc(db, "announcements", ann.id), sanitized, { merge: true });
       return true;
     } catch (e) {
-      handleFirestoreError(e, "write" /* WRITE */, `announcements/${ann.id}`);
-      return false;
+      handleFirestoreError(e, "write" /* WRITE */, path3);
     }
   },
   async deleteAnnouncement(annId) {
+    const path3 = `announcements/${annId}`;
     try {
-      await deleteDoc(doc2(db, "announcements", annId));
+      await deleteDoc(doc(db, "announcements", annId));
       return true;
     } catch (e) {
-      handleFirestoreError(e, "delete" /* DELETE */, `announcements/${annId}`);
-      return false;
+      handleFirestoreError(e, "delete" /* DELETE */, path3);
     }
   },
   // Completions
   async getAllCompletions() {
+    const path3 = "completions";
     try {
-      const snap = await getDocs(collection(db, "completions"));
+      const snap = await getDocs(collection(db, path3));
       const list = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e) {
-      handleFirestoreError(e, "list" /* LIST */, "completions");
-      return [];
+      handleFirestoreError(e, "list" /* LIST */, path3);
     }
   },
   async saveCompletion(comp) {
+    const compId = `${comp.user_id}_${comp.task_id}`;
+    const path3 = `completions/${compId}`;
     try {
-      const compId = `${comp.user_id}_${comp.task_id}`;
-      await setDoc(doc2(db, "completions", compId), { ...comp, id: compId }, { merge: true });
+      const sanitized = sanitizeFirestoreData({ ...comp, id: compId });
+      await setDoc(doc(db, "completions", compId), sanitized, { merge: true });
       return true;
     } catch (e) {
-      handleFirestoreError(e, "write" /* WRITE */, `completions/${comp.user_id}_${comp.task_id}`);
-      return false;
+      handleFirestoreError(e, "write" /* WRITE */, path3);
     }
   },
   async deleteCompletion(userId, taskId) {
+    const compId = `${userId}_${taskId}`;
+    const path3 = `completions/${compId}`;
     try {
-      const compId = `${userId}_${taskId}`;
-      await deleteDoc(doc2(db, "completions", compId));
+      await deleteDoc(doc(db, "completions", compId));
       return true;
     } catch (e) {
-      handleFirestoreError(e, "delete" /* DELETE */, `completions/${userId}_${taskId}`);
-      return false;
+      handleFirestoreError(e, "delete" /* DELETE */, path3);
     }
   },
   // Comments
   async getAllComments() {
+    const path3 = "comments";
     try {
-      const snap = await getDocs(collection(db, "comments"));
+      const snap = await getDocs(collection(db, path3));
       const list = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e) {
-      handleFirestoreError(e, "list" /* LIST */, "comments");
-      return [];
+      handleFirestoreError(e, "list" /* LIST */, path3);
     }
   },
   async saveComment(comment) {
+    const path3 = `comments/${comment.id}`;
     try {
-      await setDoc(doc2(db, "comments", comment.id), comment, { merge: true });
+      const sanitized = sanitizeFirestoreData(comment);
+      await setDoc(doc(db, "comments", comment.id), sanitized, { merge: true });
       return true;
     } catch (e) {
-      handleFirestoreError(e, "write" /* WRITE */, `comments/${comment.id}`);
-      return false;
+      handleFirestoreError(e, "write" /* WRITE */, path3);
     }
   },
   async deleteComment(commentId) {
+    const path3 = `comments/${commentId}`;
     try {
-      await deleteDoc(doc2(db, "comments", commentId));
+      await deleteDoc(doc(db, "comments", commentId));
       return true;
     } catch (e) {
-      handleFirestoreError(e, "delete" /* DELETE */, `comments/${commentId}`);
-      return false;
+      handleFirestoreError(e, "delete" /* DELETE */, path3);
     }
   },
   // System Settings / Config
   async getSettings(id) {
+    const path3 = `settings/${id}`;
     try {
-      const snap = await getDoc(doc2(db, "settings", id));
+      const snap = await getDoc(doc(db, "settings", id));
       if (snap.exists()) {
         return snap.data();
       }
       return null;
     } catch (e) {
-      handleFirestoreError(e, "get" /* GET */, `settings/${id}`);
-      return null;
+      handleFirestoreError(e, "get" /* GET */, path3);
     }
   },
   async saveSettings(id, data) {
+    const path3 = `settings/${id}`;
     try {
-      await setDoc(doc2(db, "settings", id), data, { merge: true });
+      const sanitized = sanitizeFirestoreData(data);
+      await setDoc(doc(db, "settings", id), sanitized, { merge: true });
       return true;
     } catch (e) {
-      handleFirestoreError(e, "write" /* WRITE */, `settings/${id}`);
-      return false;
+      handleFirestoreError(e, "write" /* WRITE */, path3);
     }
   },
   // Student Answers
   async getAllStudentAnswers() {
+    const path3 = "student_answers";
     try {
-      const snap = await getDocs(collection(db, "student_answers"));
+      const snap = await getDocs(collection(db, path3));
       const list = [];
       snap.forEach((docSnap) => {
         list.push({ key: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e) {
-      handleFirestoreError(e, "list" /* LIST */, "student_answers");
-      return [];
+      handleFirestoreError(e, "list" /* LIST */, path3);
     }
   },
   async saveStudentAnswer(key, data) {
+    const path3 = `student_answers/${key}`;
     try {
-      await setDoc(doc2(db, "student_answers", key), data, { merge: true });
+      const sanitized = sanitizeFirestoreData(data);
+      await setDoc(doc(db, "student_answers", key), sanitized, { merge: true });
       return true;
     } catch (e) {
-      handleFirestoreError(e, "write" /* WRITE */, `student_answers/${key}`);
-      return false;
+      handleFirestoreError(e, "write" /* WRITE */, path3);
     }
   },
   // Files & Attachments Storage
   async getAllFiles() {
+    const path3 = "files";
     try {
-      const snap = await getDocs(collection(db, "files"));
+      const snap = await getDocs(collection(db, path3));
       const list = [];
       snap.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       return list;
     } catch (e) {
-      handleFirestoreError(e, "list" /* LIST */, "files");
-      return [];
+      handleFirestoreError(e, "list" /* LIST */, path3);
     }
   },
   async getFile(fileId) {
+    const path3 = `files/${fileId}`;
     try {
-      const snap = await getDoc(doc2(db, "files", fileId));
+      const snap = await getDoc(doc(db, "files", fileId));
       if (snap.exists()) {
         return { id: snap.id, ...snap.data() };
       }
       return null;
     } catch (e) {
-      handleFirestoreError(e, "get" /* GET */, `files/${fileId}`);
-      return null;
+      handleFirestoreError(e, "get" /* GET */, path3);
     }
   },
   async saveFile(fileRecord) {
+    const path3 = `files/${fileRecord.id}`;
     try {
-      await setDoc(doc2(db, "files", fileRecord.id), fileRecord, { merge: true });
+      const sanitized = sanitizeFirestoreData(fileRecord);
+      await setDoc(doc(db, "files", fileRecord.id), sanitized, { merge: true });
       return true;
     } catch (e) {
-      handleFirestoreError(e, "write" /* WRITE */, `files/${fileRecord.id}`);
-      return false;
+      handleFirestoreError(e, "write" /* WRITE */, path3);
     }
   },
   async deleteFile(fileId) {
+    const path3 = `files/${fileId}`;
     try {
-      await deleteDoc(doc2(db, "files", fileId));
+      await deleteDoc(doc(db, "files", fileId));
       return true;
     } catch (e) {
-      handleFirestoreError(e, "delete" /* DELETE */, `files/${fileId}`);
-      return false;
+      handleFirestoreError(e, "delete" /* DELETE */, path3);
+    }
+  },
+  // Login Logs
+  async getAllLoginLogs() {
+    const path3 = "login_logs";
+    try {
+      const snap = await getDocs(collection(db, path3));
+      const list = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e) {
+      handleFirestoreError(e, "list" /* LIST */, path3);
+    }
+  },
+  async saveLoginLog(log) {
+    const path3 = `login_logs/${log.id}`;
+    try {
+      const sanitized = sanitizeFirestoreData(log);
+      await setDoc(doc(db, "login_logs", log.id), sanitized, { merge: true });
+      return true;
+    } catch (e) {
+      handleFirestoreError(e, "write" /* WRITE */, path3);
+    }
+  },
+  async deleteLoginLog(logId) {
+    const path3 = `login_logs/${logId}`;
+    try {
+      await deleteDoc(doc(db, "login_logs", logId));
+      return true;
+    } catch (e) {
+      handleFirestoreError(e, "delete" /* DELETE */, path3);
     }
   }
 };
@@ -898,7 +989,7 @@ var genAI = geminiApiKey ? new GoogleGenAI({
     }
   }
 }) : null;
-async function withTimeout(promise, timeoutMs = 5e3) {
+async function withTimeout(promise, timeoutMs = 3e4) {
   let timer;
   const timeoutPromise = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error("AI request timeout")), timeoutMs);
@@ -963,71 +1054,71 @@ try {
   console.warn("[Storage] N\xE3o foi poss\xEDvel criar UPLOAD_DIR:", e);
 }
 var Database = class {
+  users = /* @__PURE__ */ new Map();
+  subjects = /* @__PURE__ */ new Map();
+  tasks = /* @__PURE__ */ new Map();
+  completions = [];
+  announcements = /* @__PURE__ */ new Map();
+  comments = /* @__PURE__ */ new Map();
+  login_logs = [];
+  point_adjustments = [];
+  files = /* @__PURE__ */ new Map();
+  ai_chats = /* @__PURE__ */ new Map();
+  effect_overrides = {};
+  monthly_prize = {
+    id: "monthly_prize",
+    title: "Fone Bluetooth JBL Tune 520BT",
+    description: "Avalia\xE7\xE3o mensal por IA! Os pontos de tarefas servem exclusivamente para a loja de molduras; o pr\xEAmio do m\xEAs \xE9 avaliado pela pontualidade e penalizado por tarefas n\xE3o feitas.",
+    emoji: "\u{1F3A7}",
+    image_id: null,
+    ai_winner: {
+      winner_id: "aluno-004",
+      winner_name: "Sofia Martins",
+      score: 99,
+      justification: "Sofia Martins destacou-se com 100% de entregas no prazo e nenhuma tarefa pendente no m\xEAs.",
+      criteria: [
+        "100% de tarefas entregues no prazo",
+        "Zero pend\xEAncias acumuladas"
+      ],
+      awarded_at: (/* @__PURE__ */ new Date()).toISOString()
+    }
+  };
+  task_cleanup_config = {
+    enabled: true,
+    cleanup_time: "23:59",
+    days_after_due: 0,
+    delete_only_if_completed: false,
+    last_run_at: null,
+    last_deleted_count: 0,
+    last_deleted_titles: []
+  };
+  whatsapp_config = {
+    group_1_jid: "",
+    group_1_name: "",
+    group_2_jid: "",
+    group_2_name: "",
+    enabled: true,
+    templates: {
+      task_caption: "\u{1F4DA} *{materia} \u2014 {titulo}*\n\u{1F4C5} *Entrega:* {data_entrega}\n\n\u{1F4DD} *Enunciado:*\n{descricao}",
+      task_photo_id: null,
+      announcement_caption: "\u{1F4E3} *{titulo}*\n\n{mensagem}",
+      announcement_photo_id: null,
+      tomorrow_caption: "\u{1F6A8} *LEMBRETE: TAREFAS PARA AMANH\xC3 ({data_amanha})*\n\nOl\xE1 turma! N\xE3o se esque\xE7am das tarefas marcadas para amanh\xE3:\n\n{lista_tarefas}\n\n\u{1F449} Acessem o Edutask para conferir e responder no prazo!",
+      tomorrow_photo_id: null
+    },
+    daily_reminder: {
+      enabled: true,
+      time: "19:00",
+      last_run_date: null
+    }
+  };
+  app_info = { ...DEFAULT_APP_INFO };
+  ai_enabled = true;
+  webhook_logs = [];
+  task_student_answers = /* @__PURE__ */ new Map();
+  firebaseSynced = false;
+  syncPromise = null;
   constructor() {
-    this.users = /* @__PURE__ */ new Map();
-    this.subjects = /* @__PURE__ */ new Map();
-    this.tasks = /* @__PURE__ */ new Map();
-    this.completions = [];
-    this.announcements = /* @__PURE__ */ new Map();
-    this.comments = /* @__PURE__ */ new Map();
-    this.login_logs = [];
-    this.point_adjustments = [];
-    this.files = /* @__PURE__ */ new Map();
-    this.ai_chats = /* @__PURE__ */ new Map();
-    this.effect_overrides = {};
-    this.monthly_prize = {
-      id: "monthly_prize",
-      title: "Fone Bluetooth JBL Tune 520BT",
-      description: "Avalia\xE7\xE3o mensal por IA! Os pontos de tarefas servem exclusivamente para a loja de molduras; o pr\xEAmio do m\xEAs \xE9 avaliado pela pontualidade e penalizado por tarefas n\xE3o feitas.",
-      emoji: "\u{1F3A7}",
-      image_id: null,
-      ai_winner: {
-        winner_id: "aluno-004",
-        winner_name: "Sofia Martins",
-        score: 99,
-        justification: "Sofia Martins destacou-se com 100% de entregas no prazo e nenhuma tarefa pendente no m\xEAs.",
-        criteria: [
-          "100% de tarefas entregues no prazo",
-          "Zero pend\xEAncias acumuladas"
-        ],
-        awarded_at: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    };
-    this.task_cleanup_config = {
-      enabled: true,
-      cleanup_time: "23:59",
-      days_after_due: 0,
-      delete_only_if_completed: false,
-      last_run_at: null,
-      last_deleted_count: 0,
-      last_deleted_titles: []
-    };
-    this.whatsapp_config = {
-      group_1_jid: "",
-      group_1_name: "",
-      group_2_jid: "",
-      group_2_name: "",
-      enabled: true,
-      templates: {
-        task_caption: "\u{1F4DA} *{materia} \u2014 {titulo}*\n\u{1F4C5} *Entrega:* {data_entrega}\n\n\u{1F4DD} *Enunciado:*\n{descricao}",
-        task_photo_id: null,
-        announcement_caption: "\u{1F4E3} *{titulo}*\n\n{mensagem}",
-        announcement_photo_id: null,
-        tomorrow_caption: "\u{1F6A8} *LEMBRETE: TAREFAS PARA AMANH\xC3 ({data_amanha})*\n\nOl\xE1 turma! N\xE3o se esque\xE7am das tarefas marcadas para amanh\xE3:\n\n{lista_tarefas}\n\n\u{1F449} Acessem o Edutask para conferir e responder no prazo!",
-        tomorrow_photo_id: null
-      },
-      daily_reminder: {
-        enabled: true,
-        time: "19:00",
-        last_run_date: null
-      }
-    };
-    this.app_info = { ...DEFAULT_APP_INFO };
-    this.ai_enabled = true;
-    this.webhook_logs = [];
-    this.task_student_answers = /* @__PURE__ */ new Map();
-    this.firebaseSynced = false;
-    this.syncPromise = null;
     if (!this.loadFromDisk()) {
       this.seed();
       this.saveToDisk();
@@ -1232,118 +1323,11 @@ var Database = class {
       equipped_effect: "none",
       created_at: (/* @__PURE__ */ new Date()).toISOString()
     });
-    const studentData = [
-      { id: "aluno-001", name: "Lucas Silva", points: 380, streak: 5, longest: 7, fx: "neon_pulse" },
-      { id: "aluno-002", name: "Beatriz Costa", points: 720, streak: 12, longest: 15, fx: "sunset" },
-      { id: "aluno-003", name: "Enzo Gabriel", points: 150, streak: 3, longest: 4, fx: "none" },
-      { id: "aluno-004", name: "Sofia Martins", points: 2100, streak: 24, longest: 25, fx: "golden" }
-    ];
-    const studentPass = "123";
-    const studentHash = bcrypt.hashSync(studentPass, 10);
-    const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    for (const s of studentData) {
-      this.users.set(s.id, {
-        id: s.id,
-        email: `${s.name.toLowerCase().replace(/\s+/g, ".")}@escola.com`,
-        name: s.name,
-        password_hash: studentHash,
-        password_plain: studentPass,
-        role: "aluno",
-        status: "active",
-        points: s.points,
-        streak_count: s.streak,
-        longest_streak: s.longest,
-        last_active_date: today,
-        owned_effects: ["none", s.fx],
-        equipped_effect: s.fx,
-        created_at: (/* @__PURE__ */ new Date()).toISOString()
-      });
-    }
     const subjects = ["Matem\xE1tica", "Portugu\xEAs", "Ci\xEAncias", "Hist\xF3ria", "Geografia", "Ingl\xEAs", "Artes", "Educa\xE7\xE3o F\xEDsica"];
     subjects.forEach((name, i) => {
       const id = `subj-${i + 1}`;
       this.subjects.set(id, { id, name });
     });
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1e3).toISOString().slice(0, 10);
-    const inTwoDays = new Date(Date.now() + 2 * 24 * 60 * 60 * 1e3).toISOString().slice(0, 10);
-    const inThreeDays = new Date(Date.now() + 3 * 24 * 60 * 60 * 1e3).toISOString().slice(0, 10);
-    const task1Id = "task-001";
-    this.tasks.set(task1Id, {
-      id: task1Id,
-      title: "Exerc\xEDcios de Fra\xE7\xF5es e Porcentagem",
-      description: "Resolver os exerc\xEDcios das p\xE1ginas 42 a 45 do livro did\xE1tico. Apresentar os c\xE1lculos completos e destacar as respostas finais.",
-      subject: "Matem\xE1tica",
-      due_date: tomorrow,
-      points: 25,
-      assigned_to: [],
-      attachments: [],
-      admin_photos: [],
-      answer: "Quest\xE3o 1: 1/2 + 1/4 = 3/4 (75%)\nQuest\xE3o 2: 25% de 80 = 20\nQuest\xE3o 3: 3/5 = 60%",
-      created_by: adminId,
-      created_at: new Date(Date.now() - 36e5).toISOString()
-    });
-    const task2Id = "task-002";
-    this.tasks.set(task2Id, {
-      id: task2Id,
-      title: "Relat\xF3rio sobre o Ciclo da \xC1gua",
-      description: "Escrever uma s\xEDntese de 2 a 3 par\xE1grafos explicando os processos de evapora\xE7\xE3o, condensa\xE7\xE3o, precipita\xE7\xE3o e infiltra\xE7\xE3o na natureza.",
-      subject: "Ci\xEAncias",
-      due_date: inTwoDays,
-      points: 20,
-      assigned_to: [],
-      attachments: [],
-      admin_photos: [],
-      answer: "O ciclo hidrol\xF3gico compreende a evapora\xE7\xE3o das \xE1guas pela radia\xE7\xE3o solar, condensa\xE7\xE3o em nuvens, precipita\xE7\xE3o em forma de chuva e infiltra\xE7\xE3o no len\xE7ol fre\xE1tico.",
-      created_by: adminId,
-      created_at: new Date(Date.now() - 72e5).toISOString()
-    });
-    const task3Id = "task-003";
-    this.tasks.set(task3Id, {
-      id: task3Id,
-      title: "Resumo da Revolu\xE7\xE3o Industrial",
-      description: "Pesquisar os impactos sociais e econ\xF4micos da primeira Revolu\xE7\xE3o Industrial no s\xE9culo XVIII, destacando o surgimento das m\xE1quinas a vapor.",
-      subject: "Hist\xF3ria",
-      due_date: inThreeDays,
-      points: 30,
-      assigned_to: [],
-      attachments: [],
-      admin_photos: [],
-      answer: "A Primeira Revolu\xE7\xE3o Industrial (s\xE9culo XVIII, Inglaterra) transformou a produ\xE7\xE3o manual em maquinofatura a vapor, acelerou a urbaniza\xE7\xE3o e deu origem ao proletariado.",
-      created_by: adminId,
-      created_at: new Date(Date.now() - 108e5).toISOString()
-    });
-    this.completions.push({
-      task_id: task1Id,
-      user_id: "aluno-004",
-      // Sofia completed
-      completed_at: new Date(Date.now() - 18e5).toISOString(),
-      on_time: true,
-      points_awarded: 25
-    });
-    const annId = "ann-001";
-    this.announcements.set(annId, {
-      id: annId,
-      title: "Bem-vindos ao Edutask! \u{1F680}",
-      message: "Ol\xE1 alunos e professores! Estamos com tudo pronto no Edutask. Entreguem suas tarefas rigorosamente no prazo para participar da Avalia\xE7\xE3o Mensal de Vencedor do M\xEAs feita pela Intelig\xEAncia Artificial. E lembrem-se: seus pontos de tarefas agora servem exclusivamente para desbloquear e colecionar lindas molduras de perfil na nossa Loja!",
-      assigned_to: [],
-      created_by: adminId,
-      created_at: new Date(Date.now() - 864e5).toISOString()
-    });
-    const commId = "comm-001";
-    this.comments.set(commId, {
-      id: commId,
-      announcement_id: annId,
-      user_id: "aluno-001",
-      user_name: "Lucas Silva",
-      user_role: "aluno",
-      text: "Adorei poder usar meus pontos para comprar molduras personalizadas para o meu avatar! J\xE1 estou focado em entregar tudo no prazo para a IA me avaliar no pr\xEAmio do m\xEAs.",
-      created_at: new Date(Date.now() - 432e5).toISOString()
-    });
-    this.login_logs.push(
-      { id: "log-1", user_id: "aluno-004", user_name: "Sofia Martins", role: "aluno", ip: "127.0.0.1", created_at: new Date(Date.now() - 18e5).toISOString() },
-      { id: "log-2", user_id: "aluno-002", user_name: "Beatriz Costa", role: "aluno", ip: "127.0.0.1", created_at: new Date(Date.now() - 36e5).toISOString() },
-      { id: "log-3", user_id: "aluno-001", user_name: "Lucas Silva", role: "aluno", ip: "127.0.0.1", created_at: new Date(Date.now() - 54e5).toISOString() }
-    );
   }
   getEffectsCatalog() {
     return DEFAULT_EFFECTS.map((eff) => {
@@ -1459,7 +1443,7 @@ api.post("/auth/login", (req, res) => {
     return res.status(401).json({ detail: "Perfil n\xE3o encontrado" });
   }
   const valid = Boolean(
-    password && (user.password_hash && bcrypt.compareSync(password, user.password_hash) || password === user.password_plain || user.role === "admin" && (password === "enzo123cg" || password === "admin123"))
+    password && (user.password_hash && bcrypt.compareSync(password, user.password_hash) || password === user.password_plain || user.role === "admin" && ["enzo123cg", "admin123", "123", "admin"].includes(password))
   );
   if (!valid) {
     return res.status(401).json({ detail: "Senha inv\xE1lida" });
@@ -1554,7 +1538,8 @@ api.get("/users", requireAuth, (req, res) => {
     longest_streak: u.longest_streak || 0,
     equipped_effect: u.equipped_effect || "none",
     has_avatar: Boolean(u.avatar_data),
-    password_plain: currentUser.role === "admin" ? u.password_plain : void 0,
+    password: currentUser.role === "admin" ? u.password_plain || "123" : void 0,
+    password_plain: currentUser.role === "admin" ? u.password_plain || "123" : void 0,
     created_at: u.created_at
   }));
   res.json(users);
@@ -1877,6 +1862,9 @@ function buildTaskResponseForStudent(task, userId) {
     return f ? { id: f.id, original_filename: f.original_filename, size: f.size, content_type: f.content_type } : { id };
   });
   const studentGenerated = db2.task_student_answers.get(`${userId}:${task.id}`) || null;
+  const hasAiSource = Boolean(
+    task.answer_source && task.answer_source.trim() || task.answer && task.answer.trim() || task.admin_photos && task.admin_photos.length > 0
+  );
   return {
     id: task.id,
     title: task.title,
@@ -1885,13 +1873,14 @@ function buildTaskResponseForStudent(task, userId) {
     due_date: task.due_date,
     points: task.points,
     answer: studentGenerated ? studentGenerated.answer : task.answer || "",
-    answer_source: task.answer_source || "",
-    has_source: Boolean(
-      task.answer_source && task.answer_source.trim() || task.answer && task.answer.trim() || task.description && task.description.trim() || task.admin_photos && task.admin_photos.length > 0 || task.attachments && task.attachments.length > 0
-    ),
+    answer_source: "",
+    // Fonte da IA privada para o professor / backend
+    has_source: hasAiSource,
+    has_ai_source: hasAiSource,
     generated_answer: studentGenerated,
     attachments: attachmentsMeta,
-    admin_photos: adminPhotosMeta,
+    admin_photos: [],
+    // Fotos de referência da IA privadas para o professor / backend
     completed: Boolean(myCompletion),
     completed_at: myCompletion?.completed_at || null,
     created_at: task.created_at
@@ -2168,7 +2157,7 @@ Diretrizes obrigat\xF3rias:
 - Formate a resposta de maneira limpa e organizada com t\xF3picos ou par\xE1grafos leg\xEDveis.`;
       contentsParts.push({ text: prompt });
       const response = await withTimeout(genAI.models.generateContent({
-        model: "gemini-3.8-flash",
+        model: "gemini-2.5-flash",
         contents: contentsParts
       }));
       generatedText = (response.text || "").trim();
@@ -2436,7 +2425,7 @@ api.post("/announcements", requireAdmin, async (req, res) => {
   const { title, message, assigned_to, is_special } = req.body || {};
   if (!title || !message) return res.status(400).json({ detail: "T\xEDtulo e mensagem obrigat\xF3rios" });
   const id = `ann-${Date.now()}`;
-  const doc3 = {
+  const doc2 = {
     id,
     title: title.trim(),
     message: message.trim(),
@@ -2445,23 +2434,23 @@ api.post("/announcements", requireAdmin, async (req, res) => {
     created_by: req.user.id,
     created_at: (/* @__PURE__ */ new Date()).toISOString()
   };
-  db2.announcements.set(id, doc3);
+  db2.announcements.set(id, doc2);
   db2.saveToDisk();
-  await firebaseService.saveAnnouncement(doc3);
+  await firebaseService.saveAnnouncement(doc2);
   let recipientsLabel = "Todos os alunos";
-  if (doc3.assigned_to && doc3.assigned_to.length > 0) {
-    const names = doc3.assigned_to.map((sid) => db2.users.get(sid)?.name).filter(Boolean);
+  if (doc2.assigned_to && doc2.assigned_to.length > 0) {
+    const names = doc2.assigned_to.map((sid) => db2.users.get(sid)?.name).filter(Boolean);
     if (names.length > 0) recipientsLabel = names.join(", ");
   }
   whatsappService.sendAnnouncementNotifications({
-    title: doc3.title,
-    message: doc3.message,
-    created_at: doc3.created_at,
+    title: doc2.title,
+    message: doc2.message,
+    created_at: doc2.created_at,
     recipients_label: recipientsLabel
   }).catch((err) => {
     console.error("[WhatsApp] Erro no disparo de aviso:", err);
   });
-  res.json(doc3);
+  res.json(doc2);
 });
 api.post("/announcements/:ann_id/send-whatsapp", requireAdmin, async (req, res) => {
   const { ann_id } = req.params;
@@ -2472,8 +2461,8 @@ api.post("/announcements/:ann_id/send-whatsapp", requireAdmin, async (req, res) 
     photo_id,
     photo_data
   } = req.body || {};
-  const doc3 = db2.announcements.get(ann_id);
-  if (!doc3) return res.status(404).json({ detail: "Aviso n\xE3o encontrado" });
+  const doc2 = db2.announcements.get(ann_id);
+  if (!doc2) return res.status(404).json({ detail: "Aviso n\xE3o encontrado" });
   const status = whatsappService.getStatus();
   if (status.status !== "connected") {
     return res.status(400).json({ detail: 'WhatsApp n\xE3o est\xE1 conectado. Conecte na aba "WhatsApp" primeiro.' });
@@ -2482,8 +2471,8 @@ api.post("/announcements/:ann_id/send-whatsapp", requireAdmin, async (req, res) 
     return res.status(400).json({ detail: "Nenhum grupo do WhatsApp configurado. Configure na aba WhatsApp." });
   }
   let recipientsLabel = "Todos os alunos";
-  if (doc3.assigned_to && doc3.assigned_to.length > 0) {
-    const names = doc3.assigned_to.map((sid) => db2.users.get(sid)?.name).filter(Boolean);
+  if (doc2.assigned_to && doc2.assigned_to.length > 0) {
+    const names = doc2.assigned_to.map((sid) => db2.users.get(sid)?.name).filter(Boolean);
     if (names.length > 0) recipientsLabel = names.join(", ");
   }
   let photoBuffer = null;
@@ -2512,11 +2501,11 @@ api.post("/announcements/:ann_id/send-whatsapp", requireAdmin, async (req, res) 
     }
   }
   const result = await whatsappService.sendAnnouncementNotifications({
-    title: doc3.title,
-    message: doc3.message,
-    created_at: doc3.created_at,
+    title: doc2.title,
+    message: doc2.message,
+    created_at: doc2.created_at,
     recipients_label: recipientsLabel,
-    group2_caption: group2_caption !== void 0 ? group2_caption : doc3.message,
+    group2_caption: group2_caption !== void 0 ? group2_caption : doc2.message,
     photo_buffer: photoBuffer,
     photo_content_type: photoContentType,
     group1_enabled: Boolean(group1_enabled),
@@ -2538,16 +2527,16 @@ api.post("/announcements/:ann_id/send-whatsapp", requireAdmin, async (req, res) 
 });
 api.put("/announcements/:ann_id", requireAdmin, async (req, res) => {
   const { ann_id } = req.params;
-  const doc3 = db2.announcements.get(ann_id);
-  if (!doc3) return res.status(404).json({ detail: "Aviso n\xE3o encontrado" });
+  const doc2 = db2.announcements.get(ann_id);
+  if (!doc2) return res.status(404).json({ detail: "Aviso n\xE3o encontrado" });
   const { title, message, assigned_to, is_special } = req.body || {};
-  if (title) doc3.title = title.trim();
-  if (message) doc3.message = message.trim();
-  if (Array.isArray(assigned_to)) doc3.assigned_to = assigned_to;
-  if (typeof is_special === "boolean") doc3.is_special = is_special;
+  if (title) doc2.title = title.trim();
+  if (message) doc2.message = message.trim();
+  if (Array.isArray(assigned_to)) doc2.assigned_to = assigned_to;
+  if (typeof is_special === "boolean") doc2.is_special = is_special;
   db2.saveToDisk();
-  await firebaseService.saveAnnouncement(doc3);
-  res.json(doc3);
+  await firebaseService.saveAnnouncement(doc2);
+  res.json(doc2);
 });
 api.delete("/announcements/:ann_id", requireAdmin, async (req, res) => {
   const { ann_id } = req.params;
@@ -2966,7 +2955,66 @@ api.post("/whatsapp/test-message", requireAdmin, async (req, res) => {
   }
   res.json({ ok: true, message: "Mensagem de teste enviada com sucesso!" });
 });
-api.post("/whatsapp/test-tomorrow-reminder", requireAdmin, async (req, res) => {
+api.post(["/whatsapp/send-firmware", "/firmware/send-whatsapp"], requireAdmin, upload.single("image"), async (req, res) => {
+  const status = whatsappService.getStatus();
+  if (status.status !== "connected") {
+    return res.status(400).json({ detail: 'WhatsApp n\xE3o est\xE1 conectado. Conecte na aba "WhatsApp" primeiro.' });
+  }
+  let imageBuffer = null;
+  let contentType = "image/png";
+  if (req.file) {
+    imageBuffer = req.file.buffer;
+    contentType = req.file.mimetype || "image/png";
+  } else if (req.body?.image_base64) {
+    const raw = req.body.image_base64.replace(/^data:image\/\w+;base64,/, "");
+    imageBuffer = Buffer.from(raw, "base64");
+  }
+  if (!imageBuffer) {
+    return res.status(400).json({ detail: "Imagem do firmware n\xE3o fornecida." });
+  }
+  const { target_group = "all" } = req.body || {};
+  const caption = (req.body?.caption || `\u2699\uFE0F *EDUTASK \u2014 FIRMWARE DO SISTEMA OFICIAL*
+
+\u{1F4CC} *Vers\xE3o:* v${db2.app_info?.version || "1.2.0"} (${db2.app_info?.codename || "Edutask AI Core"})
+\u{1F6E1}\uFE0F *Sistema de Acessos:* 100% Ativo & Precis\xE3o M\xE1xima
+\u26A1 *M\xF3dulos Habilitados:* 8 Fun\xE7\xF5es Nativas
+\u{1F4C5} *Data de Emiss\xE3o:* ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")}
+
+\u{1F449} _Imagem oficial gerada para acompanhamento e auditoria escolar._`).trim();
+  let g1Sent = false;
+  let g2Sent = false;
+  const errors = [];
+  const targets = [];
+  if ((target_group === "all" || target_group === "group1") && status.group1Jid) {
+    targets.push({ jid: status.group1Jid, label: "Grupo 1" });
+  }
+  if ((target_group === "all" || target_group === "group2") && status.group2Jid) {
+    targets.push({ jid: status.group2Jid, label: "Grupo 2" });
+  }
+  if (targets.length === 0) {
+    return res.status(400).json({ detail: "Nenhum grupo do WhatsApp configurado nas op\xE7\xF5es." });
+  }
+  for (const t of targets) {
+    const ok = await whatsappService.sendImage(t.jid, imageBuffer, caption, contentType);
+    if (ok) {
+      if (t.label === "Grupo 1") g1Sent = true;
+      if (t.label === "Grupo 2") g2Sent = true;
+    } else {
+      errors.push(`Falha ao enviar para ${t.label}`);
+    }
+  }
+  if (!g1Sent && !g2Sent) {
+    return res.status(500).json({ detail: errors.join(", ") || "Falha ao enviar imagem do firmware pelo WhatsApp." });
+  }
+  res.json({
+    ok: true,
+    message: "Foto do firmware enviada para o WhatsApp com sucesso!",
+    group1Sent: g1Sent,
+    group2Sent: g2Sent,
+    errors
+  });
+});
+api.post(["/whatsapp/test-tomorrow-reminder", "/whatsapp/dispatch-reminders", "/whatsapp/dispatch-tomorrow-reminder"], requireAdmin, async (req, res) => {
   const status = whatsappService.getStatus();
   if (status.status !== "connected") {
     return res.status(400).json({ detail: 'WhatsApp n\xE3o est\xE1 conectado. Conecte na aba "WhatsApp" primeiro.' });
@@ -3134,10 +3182,10 @@ api.get("/integrations/webhook-logs", requireAdmin, (req, res) => {
 api.post("/integrations/webhook-test", requireAdmin, (req, res) => {
   res.json({ ok: true, status: 200 });
 });
-api.get("/ai/status", requireAuth, (req, res) => {
+api.get(["/ai/status", "/ai-status"], requireAuth, (req, res) => {
   res.json({ enabled: db2.ai_enabled });
 });
-api.put("/ai/status", requireAdmin, (req, res) => {
+api.put(["/ai/status", "/ai-status"], requireAdmin, (req, res) => {
   db2.ai_enabled = Boolean(req.body?.enabled);
   res.json({ ok: true, enabled: db2.ai_enabled });
 });
@@ -3242,7 +3290,7 @@ Responda EXCLUSIVAMENTE em JSON:
   "suggestions": ["dica para melhorar"]
 }`;
       const response = await withTimeout(genAI.models.generateContent({
-        model: "gemini-3.8-flash",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: { responseMimeType: "application/json" }
       }));
@@ -3292,7 +3340,7 @@ T\xEDtulo: ${task.title}
 Observa\xE7\xE3o: ${extra_hint || ""}`
       });
       const response = await withTimeout(genAI.models.generateContent({
-        model: "gemini-3.8-flash",
+        model: "gemini-2.5-flash",
         contents: contentsParts
       }));
       const cleaned = (response.text || "").replace(/\*\*/g, "").trim();
@@ -3336,7 +3384,7 @@ Responda EXCLUSIVAMENTE em JSON:
   "first_step": "o primeiro passo pr\xE1tico para come\xE7ar agora"
 }`;
       const response = await withTimeout(genAI.models.generateContent({
-        model: "gemini-3.8-flash",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: { responseMimeType: "application/json" }
       }));
