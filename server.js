@@ -836,6 +836,50 @@ var firebaseService = {
       handleFirestoreError(e, "write" /* WRITE */, `student_answers/${key}`);
       return false;
     }
+  },
+  // Files & Attachments Storage
+  async getAllFiles() {
+    try {
+      const snap = await getDocs(collection(db, "files"));
+      const list = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e) {
+      handleFirestoreError(e, "list" /* LIST */, "files");
+      return [];
+    }
+  },
+  async getFile(fileId) {
+    try {
+      const snap = await getDoc(doc2(db, "files", fileId));
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() };
+      }
+      return null;
+    } catch (e) {
+      handleFirestoreError(e, "get" /* GET */, `files/${fileId}`);
+      return null;
+    }
+  },
+  async saveFile(fileRecord) {
+    try {
+      await setDoc(doc2(db, "files", fileRecord.id), fileRecord, { merge: true });
+      return true;
+    } catch (e) {
+      handleFirestoreError(e, "write" /* WRITE */, `files/${fileRecord.id}`);
+      return false;
+    }
+  },
+  async deleteFile(fileId) {
+    try {
+      await deleteDoc(doc2(db, "files", fileId));
+      return true;
+    } catch (e) {
+      handleFirestoreError(e, "delete" /* DELETE */, `files/${fileId}`);
+      return false;
+    }
   }
 };
 
@@ -1006,7 +1050,7 @@ var Database = class {
   async syncWithFirebase() {
     try {
       console.log("[Firebase] Sincronizando cole\xE7\xF5es do Firestore...");
-      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers] = await Promise.all([
+      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers, remoteFiles] = await Promise.all([
         firebaseService.getAllTasks(),
         firebaseService.getAllUsers(),
         firebaseService.getAllAnnouncements(),
@@ -1014,7 +1058,8 @@ var Database = class {
         firebaseService.getAllSubjects(),
         firebaseService.getAllComments(),
         firebaseService.getSettings("system"),
-        firebaseService.getAllStudentAnswers()
+        firebaseService.getAllStudentAnswers(),
+        firebaseService.getAllFiles()
       ]);
       if (tasks && tasks.length > 0) {
         tasks.forEach((t) => {
@@ -1093,6 +1138,21 @@ var Database = class {
       if (studentAnswers && studentAnswers.length > 0) {
         studentAnswers.forEach((sa) => {
           if (sa.key) this.task_student_answers.set(sa.key, sa);
+        });
+      }
+      if (remoteFiles && remoteFiles.length > 0) {
+        remoteFiles.forEach((f) => {
+          if (f.id && f.base64) {
+            this.files.set(f.id, {
+              id: f.id,
+              original_filename: f.original_filename || f.id,
+              content_type: f.content_type || "image/jpeg",
+              size: f.size || 0,
+              data: Buffer.from(f.base64, "base64"),
+              uploaded_by: f.uploaded_by || "system",
+              created_at: f.created_at || (/* @__PURE__ */ new Date()).toISOString()
+            });
+          }
         });
       }
       this.saveToDisk();
@@ -1679,7 +1739,7 @@ api.delete("/subjects/:subject_id", requireAdmin, (req, res) => {
   firebaseService.deleteSubject(subject_id).catch(console.warn);
   res.json({ ok: true });
 });
-api.post("/files/upload", requireAdmin, upload.single("file"), (req, res) => {
+api.post("/files/upload", requireAdmin, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ detail: "Nenhum arquivo enviado" });
   const id = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const ext = path2.extname(req.file.originalname) || "";
@@ -1688,6 +1748,7 @@ api.post("/files/upload", requireAdmin, upload.single("file"), (req, res) => {
   } catch (e) {
     console.warn("Could not save file to disk:", e);
   }
+  const base64Data = req.file.buffer.toString("base64");
   const record = {
     id,
     original_filename: req.file.originalname,
@@ -1698,6 +1759,16 @@ api.post("/files/upload", requireAdmin, upload.single("file"), (req, res) => {
     created_at: (/* @__PURE__ */ new Date()).toISOString()
   };
   db2.files.set(id, record);
+  db2.saveToDisk();
+  firebaseService.saveFile({
+    id,
+    original_filename: record.original_filename,
+    content_type: record.content_type,
+    size: record.size,
+    base64: base64Data,
+    uploaded_by: record.uploaded_by,
+    created_at: record.created_at
+  }).catch((err) => console.warn("[Firebase] Erro ao salvar arquivo no Firestore:", err));
   res.json({
     id,
     filename: req.file.originalname,
@@ -1705,7 +1776,7 @@ api.post("/files/upload", requireAdmin, upload.single("file"), (req, res) => {
     content_type: record.content_type
   });
 });
-api.get("/files/:file_id/download", (req, res) => {
+api.get("/files/:file_id/download", async (req, res) => {
   const { file_id } = req.params;
   const authQuery = req.query.auth;
   let user = null;
@@ -1738,6 +1809,25 @@ api.get("/files/:file_id/download", (req, res) => {
         db2.files.set(file_id, file);
       }
     } catch {
+    }
+  }
+  if (!file) {
+    try {
+      const remoteFile = await firebaseService.getFile(file_id);
+      if (remoteFile && remoteFile.base64) {
+        file = {
+          id: file_id,
+          original_filename: remoteFile.original_filename || file_id,
+          content_type: remoteFile.content_type || "image/jpeg",
+          size: remoteFile.size || 0,
+          data: Buffer.from(remoteFile.base64, "base64"),
+          uploaded_by: remoteFile.uploaded_by || "system",
+          created_at: remoteFile.created_at || (/* @__PURE__ */ new Date()).toISOString()
+        };
+        db2.files.set(file_id, file);
+      }
+    } catch (err) {
+      console.warn("[Firebase] Erro ao buscar arquivo remoto:", err);
     }
   }
   if (!file) return res.status(404).json({ detail: "Arquivo n\xE3o encontrado" });
@@ -2130,8 +2220,17 @@ Resposta estruturada com base no material fornecido.`;
 });
 api.delete("/tasks/:task_id", requireAdmin, (req, res) => {
   const { task_id } = req.params;
+  const completionsToDelete = db2.completions.filter((c) => c.task_id === task_id);
+  completionsToDelete.forEach((c) => {
+    firebaseService.deleteCompletion(c.user_id, task_id).catch(console.warn);
+  });
   db2.tasks.delete(task_id);
   db2.completions = db2.completions.filter((c) => c.task_id !== task_id);
+  for (const [key] of db2.task_student_answers.entries()) {
+    if (key.endsWith(`:${task_id}`)) {
+      db2.task_student_answers.delete(key);
+    }
+  }
   db2.saveToDisk();
   firebaseService.deleteTask(task_id).catch((err) => {
     console.warn(`[Firebase] Erro ao remover tarefa ${task_id} do Firestore:`, err);
@@ -2166,6 +2265,10 @@ function executeTaskCleanup(manual = false) {
   const deletedTitles = [];
   for (const t of eligible) {
     deletedTitles.push(`[${t.subject}] ${t.title}`);
+    const completionsToDelete = db2.completions.filter((c) => c.task_id === t.id);
+    completionsToDelete.forEach((c) => {
+      firebaseService.deleteCompletion(c.user_id, t.id).catch(console.warn);
+    });
     db2.tasks.delete(t.id);
     db2.completions = db2.completions.filter((c) => c.task_id !== t.id);
     firebaseService.deleteTask(t.id).catch((err) => {
@@ -2176,6 +2279,7 @@ function executeTaskCleanup(manual = false) {
   db2.task_cleanup_config.last_deleted_count = eligible.length;
   db2.task_cleanup_config.last_deleted_titles = deletedTitles.slice(0, 20);
   db2.saveToDisk();
+  saveSystemSettingsToFirestore();
   console.log(`[TaskCleanup] Executed (${manual ? "manual" : "scheduled"}): ${eligible.length} tasks removed.`);
   return { count: eligible.length, deleted_titles: deletedTitles };
 }
@@ -3593,7 +3697,7 @@ app2.use("/api", async (req, res, next) => {
   next();
 }, api);
 async function startServer() {
-  if (process.env.VERCEL) return;
+  if (process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME) return;
   if (process.env.NODE_ENV === "production") {
     const distPath = path2.resolve(__dirname2, "dist");
     app2.use(express.static(distPath));
@@ -3616,7 +3720,7 @@ async function startServer() {
     console.log(`Edutask server running on http://${HOST}:${PORT}`);
   });
 }
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.VERCEL_ENV && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   startServer();
 }
 var server_default = app2;

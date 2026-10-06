@@ -349,7 +349,7 @@ class Database {
   async syncWithFirebase() {
     try {
       console.log('[Firebase] Sincronizando coleções do Firestore...');
-      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers] = await Promise.all([
+      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers, remoteFiles] = await Promise.all([
         firebaseService.getAllTasks(),
         firebaseService.getAllUsers(),
         firebaseService.getAllAnnouncements(),
@@ -358,6 +358,7 @@ class Database {
         firebaseService.getAllComments(),
         firebaseService.getSettings('system'),
         firebaseService.getAllStudentAnswers(),
+        firebaseService.getAllFiles(),
       ]);
 
       if (tasks && tasks.length > 0) {
@@ -445,6 +446,22 @@ class Database {
       if (studentAnswers && studentAnswers.length > 0) {
         studentAnswers.forEach((sa) => {
           if (sa.key) this.task_student_answers.set(sa.key, sa);
+        });
+      }
+
+      if (remoteFiles && remoteFiles.length > 0) {
+        remoteFiles.forEach((f) => {
+          if (f.id && f.base64) {
+            this.files.set(f.id, {
+              id: f.id,
+              original_filename: f.original_filename || f.id,
+              content_type: f.content_type || 'image/jpeg',
+              size: f.size || 0,
+              data: Buffer.from(f.base64, 'base64'),
+              uploaded_by: f.uploaded_by || 'system',
+              created_at: f.created_at || new Date().toISOString(),
+            });
+          }
         });
       }
 
@@ -1145,7 +1162,7 @@ api.delete('/subjects/:subject_id', requireAdmin, (req, res) => {
 // ---------------------------------------------------------------------------
 // Files Upload & Download
 // ---------------------------------------------------------------------------
-api.post('/files/upload', requireAdmin, upload.single('file'), (req, res) => {
+api.post('/files/upload', requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ detail: 'Nenhum arquivo enviado' });
 
   const id = `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1156,6 +1173,7 @@ api.post('/files/upload', requireAdmin, upload.single('file'), (req, res) => {
     console.warn('Could not save file to disk:', e);
   }
 
+  const base64Data = req.file.buffer.toString('base64');
   const record: FileRecord = {
     id,
     original_filename: req.file.originalname,
@@ -1167,6 +1185,18 @@ api.post('/files/upload', requireAdmin, upload.single('file'), (req, res) => {
   };
 
   db.files.set(id, record);
+  db.saveToDisk();
+
+  firebaseService.saveFile({
+    id,
+    original_filename: record.original_filename,
+    content_type: record.content_type,
+    size: record.size,
+    base64: base64Data,
+    uploaded_by: record.uploaded_by,
+    created_at: record.created_at,
+  }).catch((err) => console.warn('[Firebase] Erro ao salvar arquivo no Firestore:', err));
+
   res.json({
     id,
     filename: req.file.originalname,
@@ -1175,7 +1205,7 @@ api.post('/files/upload', requireAdmin, upload.single('file'), (req, res) => {
   });
 });
 
-api.get('/files/:file_id/download', (req, res) => {
+api.get('/files/:file_id/download', async (req, res) => {
   const { file_id } = req.params;
   const authQuery = req.query.auth as string;
   let user: User | null = null;
@@ -1210,6 +1240,27 @@ api.get('/files/:file_id/download', (req, res) => {
         db.files.set(file_id, file);
       }
     } catch {}
+  }
+
+  if (!file) {
+    // Attempt remote Firestore fallback
+    try {
+      const remoteFile = await firebaseService.getFile(file_id);
+      if (remoteFile && remoteFile.base64) {
+        file = {
+          id: file_id,
+          original_filename: remoteFile.original_filename || file_id,
+          content_type: remoteFile.content_type || 'image/jpeg',
+          size: remoteFile.size || 0,
+          data: Buffer.from(remoteFile.base64, 'base64'),
+          uploaded_by: remoteFile.uploaded_by || 'system',
+          created_at: remoteFile.created_at || new Date().toISOString(),
+        };
+        db.files.set(file_id, file);
+      }
+    } catch (err) {
+      console.warn('[Firebase] Erro ao buscar arquivo remoto:', err);
+    }
   }
 
   if (!file) return res.status(404).json({ detail: 'Arquivo não encontrado' });
@@ -1663,8 +1714,20 @@ Diretrizes obrigatórias:
 
 api.delete('/tasks/:task_id', requireAdmin, (req, res) => {
   const { task_id } = req.params;
+  const completionsToDelete = db.completions.filter((c) => c.task_id === task_id);
+  completionsToDelete.forEach((c) => {
+    firebaseService.deleteCompletion(c.user_id, task_id).catch(console.warn);
+  });
+
   db.tasks.delete(task_id);
   db.completions = db.completions.filter((c) => c.task_id !== task_id);
+
+  for (const [key] of db.task_student_answers.entries()) {
+    if (key.endsWith(`:${task_id}`)) {
+      db.task_student_answers.delete(key);
+    }
+  }
+
   db.saveToDisk();
 
   firebaseService.deleteTask(task_id).catch((err) => {
@@ -1712,6 +1775,11 @@ function executeTaskCleanup(manual = false): { count: number; deleted_titles: st
 
   for (const t of eligible) {
     deletedTitles.push(`[${t.subject}] ${t.title}`);
+    const completionsToDelete = db.completions.filter((c) => c.task_id === t.id);
+    completionsToDelete.forEach((c) => {
+      firebaseService.deleteCompletion(c.user_id, t.id).catch(console.warn);
+    });
+
     db.tasks.delete(t.id);
     db.completions = db.completions.filter((c) => c.task_id !== t.id);
     firebaseService.deleteTask(t.id).catch((err) => {
@@ -1723,6 +1791,7 @@ function executeTaskCleanup(manual = false): { count: number; deleted_titles: st
   db.task_cleanup_config.last_deleted_count = eligible.length;
   db.task_cleanup_config.last_deleted_titles = deletedTitles.slice(0, 20);
   db.saveToDisk();
+  saveSystemSettingsToFirestore();
 
   console.log(`[TaskCleanup] Executed (${manual ? 'manual' : 'scheduled'}): ${eligible.length} tasks removed.`);
   return { count: eligible.length, deleted_titles: deletedTitles };
@@ -3388,7 +3457,7 @@ app.use('/api', async (req, res, next) => {
 // Server Bootstrap & Vite Integration
 // ---------------------------------------------------------------------------
 async function startServer() {
-  if (process.env.VERCEL) return;
+  if (process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME) return;
 
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(__dirname, 'dist');
@@ -3414,7 +3483,7 @@ async function startServer() {
   });
 }
 
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.VERCEL_ENV && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   startServer();
 }
 

@@ -296,5 +296,53 @@ export const firebaseService = {
       handleFirestoreError(e, OperationType.WRITE, `student_answers/${key}`);
       return false;
     }
+  },
+
+  // Files & Attachments Storage
+  async getAllFiles(): Promise<any[]> {
+    try {
+      const snap = await getDocs(collection(db, 'files'));
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.LIST, 'files');
+      return [];
+    }
+  },
+
+  async getFile(fileId: string): Promise<any | null> {
+    try {
+      const snap = await getDoc(doc(db, 'files', fileId));
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() };
+      }
+      return null;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.GET, `files/${fileId}`);
+      return null;
+    }
+  },
+
+  async saveFile(fileRecord: any): Promise<boolean> {
+    try {
+      await setDoc(doc(db, 'files', fileRecord.id), fileRecord, { merge: true });
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, `files/${fileRecord.id}`);
+      return false;
+    }
+  },
+
+  async deleteFile(fileId: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'files', fileId));
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.DELETE, `files/${fileId}`);
+      return false;
+    }
   }
 };
