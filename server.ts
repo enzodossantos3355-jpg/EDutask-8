@@ -311,6 +311,9 @@ class Database {
   webhook_logs: any[] = [];
   task_student_answers: Map<string, GeneratedTaskAnswer> = new Map();
 
+  private firebaseSynced: boolean = false;
+  private syncPromise: Promise<void> | null = null;
+
   constructor() {
     if (!this.loadFromDisk()) {
       this.seed();
@@ -318,15 +321,31 @@ class Database {
     }
     whatsappService.setConfig(this.whatsapp_config);
     whatsappService.initAutoConnect();
-    this.syncWithFirebase().catch((err) => {
+    this.ensureSynced().catch((err) => {
       console.warn('[Firebase Sync Error]', err);
     });
   }
 
+  async ensureSynced() {
+    if (this.firebaseSynced) return;
+    if (!this.syncPromise) {
+      this.syncPromise = this.syncWithFirebase().finally(() => {
+        this.firebaseSynced = true;
+      });
+    }
+    await this.syncPromise;
+  }
+
   async syncWithFirebase() {
     try {
-      console.log('[Firebase] Sincronizando coleção tasks do Firestore...');
-      const tasks = await firebaseService.getAllTasks();
+      console.log('[Firebase] Sincronizando coleção do Firestore...');
+      const [tasks, users, announcements, completions] = await Promise.all([
+        firebaseService.getAllTasks(),
+        firebaseService.getAllUsers(),
+        firebaseService.getAllAnnouncements(),
+        firebaseService.getAllCompletions(),
+      ]);
+
       if (tasks && tasks.length > 0) {
         tasks.forEach((t) => {
           this.tasks.set(t.id, {
@@ -345,17 +364,40 @@ class Database {
             created_at: t.created_at || new Date().toISOString(),
           });
         });
-        console.log(`[Firebase] ${tasks.length} tarefas sincronizadas do Firestore.`);
-        this.saveToDisk();
       } else if (this.tasks.size > 0) {
-        console.log('[Firebase] Coleção tasks vazia. Enviando tarefas locais para o Firestore...');
         for (const task of this.tasks.values()) {
           await firebaseService.saveTask(task);
         }
-        console.log('[Firebase] Tarefas locais enviadas para o Firestore com sucesso.');
       }
+
+      if (users && users.length > 0) {
+        users.forEach((u) => {
+          if (u.id) this.users.set(u.id, u);
+        });
+      } else if (this.users.size > 0) {
+        for (const u of this.users.values()) {
+          await firebaseService.saveUser(u);
+        }
+      }
+
+      if (announcements && announcements.length > 0) {
+        announcements.forEach((a) => {
+          if (a.id) this.announcements.set(a.id, a);
+        });
+      } else if (this.announcements.size > 0) {
+        for (const a of this.announcements.values()) {
+          await firebaseService.saveAnnouncement(a);
+        }
+      }
+
+      if (completions && completions.length > 0) {
+        this.completions = completions;
+      }
+
+      this.saveToDisk();
+      console.log('[Firebase] Sincronização com o Firestore concluída.');
     } catch (e: any) {
-      console.warn('[Firebase] Falha na sincronização inicial:', e?.message || e);
+      console.warn('[Firebase] Falha na sincronização:', e?.message || e);
     }
   }
 
@@ -1694,7 +1736,7 @@ api.post('/admin/task-cleanup/run', requireAdmin, (req, res) => {
   });
 });
 
-api.post('/tasks/:task_id/complete', requireAuth, (req, res) => {
+api.post('/tasks/:task_id/complete', requireAuth, async (req, res) => {
   const { task_id } = req.params;
   const user = (req as any).user as User;
   const task = db.tasks.get(task_id);
@@ -1711,18 +1753,24 @@ api.post('/tasks/:task_id/complete', requireAuth, (req, res) => {
   const basePoints = task.points || 10;
   const awarded = onTime ? basePoints : Math.max(1, Math.floor(basePoints * 0.3));
 
-  db.completions.push({
+  const comp = {
     task_id,
     user_id: user.id,
     completed_at: now,
     on_time: onTime,
     points_awarded: awarded,
-  });
+  };
+
+  db.completions.push(comp);
 
   if (user.role === 'aluno') {
     user.points = (user.points || 0) + awarded;
     updateStudentStreak(user.id);
+    await firebaseService.saveUser(user);
   }
+
+  await firebaseService.saveCompletion(comp);
+  db.saveToDisk();
 
   res.json({ ok: true, points_awarded: awarded, on_time: onTime, new_total: user.points });
 });
@@ -1767,7 +1815,7 @@ api.get('/announcements', requireAuth, (req, res) => {
   res.json(filtered);
 });
 
-api.post('/announcements', requireAdmin, (req, res) => {
+api.post('/announcements', requireAdmin, async (req, res) => {
   const { title, message, assigned_to, is_special } = req.body || {};
   if (!title || !message) return res.status(400).json({ detail: 'Título e mensagem obrigatórios' });
 
@@ -1784,6 +1832,8 @@ api.post('/announcements', requireAdmin, (req, res) => {
 
   db.announcements.set(id, doc);
   db.saveToDisk();
+
+  await firebaseService.saveAnnouncement(doc);
 
   // Disparo automático em background (não bloqueante)
   let recipientsLabel = 'Todos os alunos';
@@ -1886,7 +1936,7 @@ api.post('/announcements/:ann_id/send-whatsapp', requireAdmin, async (req, res) 
   });
 });
 
-api.put('/announcements/:ann_id', requireAdmin, (req, res) => {
+api.put('/announcements/:ann_id', requireAdmin, async (req, res) => {
   const { ann_id } = req.params;
   const doc = db.announcements.get(ann_id);
   if (!doc) return res.status(404).json({ detail: 'Aviso não encontrado' });
@@ -1898,16 +1948,18 @@ api.put('/announcements/:ann_id', requireAdmin, (req, res) => {
   if (typeof is_special === 'boolean') doc.is_special = is_special;
 
   db.saveToDisk();
+  await firebaseService.saveAnnouncement(doc);
   res.json(doc);
 });
 
-api.delete('/announcements/:ann_id', requireAdmin, (req, res) => {
+api.delete('/announcements/:ann_id', requireAdmin, async (req, res) => {
   const { ann_id } = req.params;
   db.announcements.delete(ann_id);
   for (const [id, c] of db.comments.entries()) {
     if (c.announcement_id === ann_id) db.comments.delete(id);
   }
   db.saveToDisk();
+  await firebaseService.deleteAnnouncement(ann_id);
   res.json({ ok: true });
 });
 
@@ -3193,9 +3245,16 @@ setInterval(() => {
 }, 30000);
 
 // ---------------------------------------------------------------------------
-// Mount /api router
+// Mount /api router with Firestore sync guarantee for Serverless environments
 // ---------------------------------------------------------------------------
-app.use('/api', api);
+app.use('/api', async (req, res, next) => {
+  try {
+    await db.ensureSynced();
+  } catch (err) {
+    console.warn('[Firebase Sync Middleware Error]', err);
+  }
+  next();
+}, api);
 
 // ---------------------------------------------------------------------------
 // Server Bootstrap & Vite Integration

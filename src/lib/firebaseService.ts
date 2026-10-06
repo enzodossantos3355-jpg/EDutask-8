@@ -58,5 +58,64 @@ export const firebaseService = {
       console.warn(`[Firebase] Erro ao salvar usuário ${user.id}:`, e?.message || e);
       return false;
     }
+  },
+
+  async getAllAnnouncements(): Promise<any[]> {
+    try {
+      const snap = await getDocs(collection(db, 'announcements'));
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e: any) {
+      console.warn('[Firebase] Erro ao buscar avisos:', e?.message || e);
+      return [];
+    }
+  },
+
+  async saveAnnouncement(ann: any): Promise<boolean> {
+    try {
+      await setDoc(doc(db, 'announcements', ann.id), ann, { merge: true });
+      return true;
+    } catch (e: any) {
+      console.warn(`[Firebase] Erro ao salvar aviso ${ann.id}:`, e?.message || e);
+      return false;
+    }
+  },
+
+  async deleteAnnouncement(annId: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'announcements', annId));
+      return true;
+    } catch (e: any) {
+      console.warn(`[Firebase] Erro ao remover aviso ${annId}:`, e?.message || e);
+      return false;
+    }
+  },
+
+  async getAllCompletions(): Promise<any[]> {
+    try {
+      const snap = await getDocs(collection(db, 'completions'));
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e: any) {
+      console.warn('[Firebase] Erro ao buscar entregas:', e?.message || e);
+      return [];
+    }
+  },
+
+  async saveCompletion(comp: any): Promise<boolean> {
+    try {
+      const compId = `${comp.user_id}_${comp.task_id}`;
+      await setDoc(doc(db, 'completions', compId), { ...comp, id: compId }, { merge: true });
+      return true;
+    } catch (e: any) {
+      console.warn(`[Firebase] Erro ao salvar entrega:`, e?.message || e);
+      return false;
+    }
   }
 };
