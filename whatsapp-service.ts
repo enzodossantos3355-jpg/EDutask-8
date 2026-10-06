@@ -2,15 +2,11 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason,
-  Browsers,
-  type WASocket,
-  type ConnectionState,
-} from '@whiskeysockets/baileys';
 import pino from 'pino';
 import QRCode from 'qrcode';
+
+type WASocket = any;
+type ConnectionState = any;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -114,6 +110,7 @@ class WhatsAppService {
    * Auto-inicia conexão se houver credenciais salvas em disco (sessão prévia ativa)
    */
   public initAutoConnect() {
+    if (process.env.VERCEL) return;
     try {
       const credsPath = path.resolve(AUTH_DIR, 'creds.json');
       if (fs.existsSync(credsPath)) {
@@ -172,6 +169,12 @@ class WhatsAppService {
   }
 
   public async connect(): Promise<WhatsAppServiceStatus> {
+    if (process.env.VERCEL) {
+      this.status = 'disconnected';
+      this.lastError = 'WhatsApp não é executado no ambiente serverless Vercel.';
+      return this.getStatus();
+    }
+
     if (this.status === 'connected' && this.sock) {
       return this.getStatus();
     }
@@ -185,6 +188,10 @@ class WhatsAppService {
     this.lastError = null;
 
     try {
+      const baileys = await import('@whiskeysockets/baileys');
+      const makeWASocket = baileys.default || baileys.makeWASocket;
+      const { useMultiFileAuthState, DisconnectReason, Browsers } = baileys;
+
       if (!fs.existsSync(AUTH_DIR)) {
         fs.mkdirSync(AUTH_DIR, { recursive: true });
       }
@@ -196,7 +203,7 @@ class WhatsAppService {
         auth: state,
         logger,
         printQRInTerminal: false,
-        browser: Browsers.macOS('Desktop'),
+        browser: Browsers ? Browsers.macOS('Desktop') : ['Mac OS', 'Desktop', '14.0.0'],
         syncFullHistory: false,
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 60000,
@@ -358,7 +365,7 @@ class WhatsAppService {
     }
     try {
       const groups = await this.sock.groupFetchAllParticipating();
-      return Object.values(groups).map((g) => ({
+      return Object.values(groups).map((g: any) => ({
         id: g.id,
         subject: g.subject || 'Grupo sem nome',
         participantsCount: g.participants?.length || 0,

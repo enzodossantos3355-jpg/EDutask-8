@@ -8,7 +8,6 @@ import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
-import { createServer as createViteServer } from 'vite';
 import { whatsappService } from './whatsapp-service.js';
 import { firebaseService } from './src/lib/firebaseService.js';
 
@@ -349,12 +348,16 @@ class Database {
 
   async syncWithFirebase() {
     try {
-      console.log('[Firebase] Sincronizando coleção do Firestore...');
-      const [tasks, users, announcements, completions] = await Promise.all([
+      console.log('[Firebase] Sincronizando coleções do Firestore...');
+      const [tasks, users, announcements, completions, subjects, comments, settings, studentAnswers] = await Promise.all([
         firebaseService.getAllTasks(),
         firebaseService.getAllUsers(),
         firebaseService.getAllAnnouncements(),
         firebaseService.getAllCompletions(),
+        firebaseService.getAllSubjects(),
+        firebaseService.getAllComments(),
+        firebaseService.getSettings('system'),
+        firebaseService.getAllStudentAnswers(),
       ]);
 
       if (tasks && tasks.length > 0) {
@@ -385,9 +388,21 @@ class Database {
         users.forEach((u) => {
           if (u.id) this.users.set(u.id, u);
         });
-      } else if (this.users.size > 0) {
-        for (const u of this.users.values()) {
-          await firebaseService.saveUser(u);
+      }
+      // Ensure seed users exist in Firestore
+      for (const [id, seedUser] of this.users.entries()) {
+        if (!users || !users.some((u) => u.id === id)) {
+          await firebaseService.saveUser(seedUser);
+        }
+      }
+
+      if (subjects && subjects.length > 0) {
+        subjects.forEach((s) => {
+          if (s.id) this.subjects.set(s.id, s);
+        });
+      } else if (this.subjects.size > 0) {
+        for (const subj of this.subjects.values()) {
+          await firebaseService.saveSubject(subj);
         }
       }
 
@@ -403,6 +418,34 @@ class Database {
 
       if (completions && completions.length > 0) {
         this.completions = completions;
+      }
+
+      if (comments && comments.length > 0) {
+        comments.forEach((c) => {
+          if (c.id) this.comments.set(c.id, c);
+        });
+      }
+
+      if (settings) {
+        if (settings.monthly_prize) this.monthly_prize = settings.monthly_prize;
+        if (settings.task_cleanup_config) this.task_cleanup_config = { ...this.task_cleanup_config, ...settings.task_cleanup_config };
+        if (settings.whatsapp_config) this.whatsapp_config = { ...this.whatsapp_config, ...settings.whatsapp_config };
+        if (settings.app_info) this.app_info = settings.app_info;
+        if (settings.effect_overrides) this.effect_overrides = settings.effect_overrides;
+      } else {
+        await firebaseService.saveSettings('system', {
+          monthly_prize: this.monthly_prize,
+          task_cleanup_config: this.task_cleanup_config,
+          whatsapp_config: this.whatsapp_config,
+          app_info: this.app_info,
+          effect_overrides: this.effect_overrides,
+        });
+      }
+
+      if (studentAnswers && studentAnswers.length > 0) {
+        studentAnswers.forEach((sa) => {
+          if (sa.key) this.task_student_answers.set(sa.key, sa);
+        });
       }
 
       this.saveToDisk();
@@ -903,6 +946,9 @@ api.post('/users', requireAdmin, (req, res) => {
   };
 
   db.users.set(id, newUser);
+  db.saveToDisk();
+  firebaseService.saveUser(newUser).catch(console.warn);
+
   res.json({
     id: newUser.id,
     email: newUser.email,
@@ -923,6 +969,9 @@ api.patch('/users/:user_id/status', requireAdmin, (req, res) => {
     return res.status(400).json({ detail: 'Status inválido' });
   }
   user.status = status;
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
+
   res.json({ ok: true, status: user.status });
 });
 
@@ -937,6 +986,9 @@ api.patch('/users/:user_id', requireAdmin, (req, res) => {
     user.password_hash = bcrypt.hashSync(password, 10);
     user.password_plain = password;
   }
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
+
   res.json({ ok: true, user: { id: user.id, name: user.name } });
 });
 
@@ -948,6 +1000,9 @@ api.patch('/me', requireAuth, (req, res) => {
     user.password_hash = bcrypt.hashSync(password, 10);
     user.password_plain = password;
   }
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
+
   res.json({ ok: true });
 });
 
@@ -959,6 +1014,9 @@ api.delete('/users/:user_id', requireAdmin, (req, res) => {
     return res.status(400).json({ detail: 'Não é possível remover o administrador principal' });
   }
   db.users.delete(user_id);
+  db.saveToDisk();
+  firebaseService.deleteUser(user_id).catch(console.warn);
+
   res.json({ ok: true });
 });
 
@@ -983,6 +1041,9 @@ api.post('/users/:user_id/points', requireAdmin, (req, res) => {
     created_at: new Date().toISOString(),
   });
 
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
+
   res.json({ ok: true, total_points: user.points, delta: d });
 });
 
@@ -995,6 +1056,9 @@ api.post('/me/avatar', requireAuth, upload.single('file'), (req, res) => {
 
   user.avatar_data = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
   user.avatar_content_type = req.file.mimetype;
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
+
   res.json({ ok: true });
 });
 
@@ -1002,6 +1066,9 @@ api.delete('/me/avatar', requireAuth, (req, res) => {
   const user = (req as any).user as User;
   user.avatar_data = undefined;
   user.avatar_content_type = undefined;
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
+
   res.json({ ok: true });
 });
 
@@ -1013,6 +1080,9 @@ api.post('/users/:user_id/avatar', requireAdmin, upload.single('file'), (req, re
 
   user.avatar_data = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
   user.avatar_content_type = req.file.mimetype;
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
+
   res.json({ ok: true });
 });
 
@@ -1023,6 +1093,9 @@ api.delete('/users/:user_id/avatar', requireAdmin, (req, res) => {
 
   user.avatar_data = undefined;
   user.avatar_content_type = undefined;
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
+
   res.json({ ok: true });
 });
 
@@ -1054,12 +1127,18 @@ api.post('/subjects', requireAdmin, (req, res) => {
   const id = `subj-${Date.now()}`;
   const subj = { id, name: name.trim() };
   db.subjects.set(id, subj);
+  db.saveToDisk();
+  firebaseService.saveSubject(subj).catch(console.warn);
+
   res.json(subj);
 });
 
 api.delete('/subjects/:subject_id', requireAdmin, (req, res) => {
   const { subject_id } = req.params;
   db.subjects.delete(subject_id);
+  db.saveToDisk();
+  firebaseService.deleteSubject(subject_id).catch(console.warn);
+
   res.json({ ok: true });
 });
 
@@ -1577,6 +1656,7 @@ Diretrizes obrigatórias:
 
   db.task_student_answers.set(`${user.id}:${task.id}`, record);
   db.saveToDisk();
+  firebaseService.saveStudentAnswer(`${user.id}:${task.id}`, record).catch(console.warn);
 
   res.json(record);
 });
@@ -1728,6 +1808,7 @@ api.put('/admin/task-cleanup', requireAdmin, (req, res) => {
   }
 
   db.saveToDisk();
+  saveSystemSettingsToFirestore();
 
   const eligible = getTasksEligibleForCleanup();
   res.json({
@@ -1795,8 +1876,11 @@ api.post('/tasks/:task_id/uncomplete', requireAuth, (req, res) => {
     const comp = db.completions[idx];
     if (user.role === 'aluno') {
       user.points = Math.max(0, (user.points || 0) - comp.points_awarded);
+      firebaseService.saveUser(user).catch(console.warn);
     }
     db.completions.splice(idx, 1);
+    firebaseService.deleteCompletion(user.id, task_id).catch(console.warn);
+    db.saveToDisk();
   }
 
   res.json({ ok: true });
@@ -2000,6 +2084,9 @@ api.post('/announcements/:ann_id/comments', requireAuth, (req, res) => {
   };
 
   db.comments.set(id, comment);
+  db.saveToDisk();
+  firebaseService.saveComment(comment).catch(console.warn);
+
   res.json(comment);
 });
 
@@ -2014,6 +2101,9 @@ api.delete('/announcements/:ann_id/comments/:comment_id', requireAuth, (req, res
   }
 
   db.comments.delete(comment_id);
+  db.saveToDisk();
+  firebaseService.deleteComment(comment_id).catch(console.warn);
+
   res.json({ ok: true });
 });
 
@@ -2297,6 +2387,16 @@ api.get('/monthly-prize', requireAuth, (req, res) => {
   });
 });
 
+function saveSystemSettingsToFirestore() {
+  firebaseService.saveSettings('system', {
+    monthly_prize: db.monthly_prize,
+    task_cleanup_config: db.task_cleanup_config,
+    whatsapp_config: db.whatsapp_config,
+    app_info: db.app_info,
+    effect_overrides: db.effect_overrides,
+  }).catch((err) => console.warn('[Firebase] Erro ao salvar configurações:', err));
+}
+
 api.put('/monthly-prize', requireAdmin, (req, res) => {
   const { title, description, emoji, image_id } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ detail: 'Título obrigatório' });
@@ -2311,6 +2411,7 @@ api.put('/monthly-prize', requireAdmin, (req, res) => {
     updated_at: new Date().toISOString(),
   };
   db.saveToDisk();
+  saveSystemSettingsToFirestore();
   res.json({ ok: true });
 });
 
@@ -2331,6 +2432,7 @@ api.post('/monthly-prize/confirm-winner', requireAdmin, (req, res) => {
     confirmed_at: new Date().toISOString(),
   };
   db.saveToDisk();
+  saveSystemSettingsToFirestore();
   res.json({ ok: true, ai_winner: db.monthly_prize.ai_winner });
 });
 
@@ -2338,6 +2440,7 @@ api.delete('/monthly-prize/winner', requireAdmin, (req, res) => {
   if (db.monthly_prize) {
     db.monthly_prize.ai_winner = null;
     db.saveToDisk();
+    saveSystemSettingsToFirestore();
   }
   res.json({ ok: true });
 });
@@ -2345,6 +2448,7 @@ api.delete('/monthly-prize/winner', requireAdmin, (req, res) => {
 api.delete('/monthly-prize', requireAdmin, (req, res) => {
   db.monthly_prize = null;
   db.saveToDisk();
+  saveSystemSettingsToFirestore();
   res.json({ ok: true });
 });
 
@@ -2362,6 +2466,8 @@ api.put('/app-info', requireAdmin, (req, res) => {
     ...patch,
     updated_at: new Date().toISOString(),
   };
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
   res.json(db.app_info);
 });
 
@@ -2415,6 +2521,7 @@ api.put('/whatsapp/config', requireAdmin, (req, res) => {
   };
   whatsappService.setConfig(db.whatsapp_config);
   db.saveToDisk();
+  saveSystemSettingsToFirestore();
   res.json({
     ok: true,
     config: db.whatsapp_config,
@@ -2553,7 +2660,9 @@ async function checkDailyTomorrowReminder() {
 }
 
 // Rodar verificação a cada 30 segundos
-setInterval(checkDailyTomorrowReminder, 30000);
+if (!process.env.VERCEL) {
+  setInterval(checkDailyTomorrowReminder, 30000);
+}
 
 // ---------------------------------------------------------------------------
 // Store Effects
@@ -2581,6 +2690,8 @@ api.put('/effects/:effect_id', requireAdmin, (req, res) => {
   if (isNaN(c) || c < 0) return res.status(400).json({ detail: 'Custo inválido' });
 
   db.effect_overrides[effect_id] = { cost: c };
+  db.saveToDisk();
+  saveSystemSettingsToFirestore();
   res.json({ ok: true, effect_id, new_cost: c });
 });
 
@@ -2605,6 +2716,8 @@ api.post('/me/effects/buy', requireAuth, (req, res) => {
 
   user.points -= cost;
   user.owned_effects.push(effect.id);
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
 
   res.json({
     ok: true,
@@ -2626,6 +2739,8 @@ api.post('/me/effects/equip', requireAuth, (req, res) => {
   }
 
   user.equipped_effect = effId;
+  db.saveToDisk();
+  firebaseService.saveUser(user).catch(console.warn);
   res.json({ ok: true, equipped: effId });
 });
 
@@ -3234,26 +3349,28 @@ Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
 // Background Task Auto-Cleanup Runner (checks schedule every 30s)
 // ---------------------------------------------------------------------------
 let lastCleanupMinuteRun = '';
-setInterval(() => {
-  try {
-    const cfg = db.task_cleanup_config;
-    if (!cfg || !cfg.enabled || !cfg.cleanup_time) return;
+if (!process.env.VERCEL) {
+  setInterval(() => {
+    try {
+      const cfg = db.task_cleanup_config;
+      if (!cfg || !cfg.enabled || !cfg.cleanup_time) return;
 
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const currentTime = `${hours}:${minutes}`;
-    const today = now.toISOString().slice(0, 10);
-    const runKey = `${today}_${currentTime}`;
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const currentTime = `${hours}:${minutes}`;
+      const today = now.toISOString().slice(0, 10);
+      const runKey = `${today}_${currentTime}`;
 
-    if (currentTime === cfg.cleanup_time && lastCleanupMinuteRun !== runKey) {
-      lastCleanupMinuteRun = runKey;
-      executeTaskCleanup(false);
+      if (currentTime === cfg.cleanup_time && lastCleanupMinuteRun !== runKey) {
+        lastCleanupMinuteRun = runKey;
+        executeTaskCleanup(false);
+      }
+    } catch (err) {
+      console.error('[TaskCleanup] Background check error:', err);
     }
-  } catch (err) {
-    console.error('[TaskCleanup] Background check error:', err);
-  }
-}, 30000);
+  }, 30000);
+}
 
 // ---------------------------------------------------------------------------
 // Mount /api router with Firestore sync guarantee for Serverless environments
@@ -3271,6 +3388,8 @@ app.use('/api', async (req, res, next) => {
 // Server Bootstrap & Vite Integration
 // ---------------------------------------------------------------------------
 async function startServer() {
+  if (process.env.VERCEL) return;
+
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(__dirname, 'dist');
     app.use(express.static(distPath));
@@ -3278,11 +3397,16 @@ async function startServer() {
       res.sendFile(path.resolve(distPath, 'index.html'));
     });
   } else {
-    const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true, hmr: false },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.warn('[Vite Integration]', e);
+    }
   }
 
   app.listen(PORT, HOST, () => {
@@ -3290,6 +3414,8 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
 
 export default app;

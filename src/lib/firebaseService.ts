@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 
 export enum OperationType {
@@ -37,6 +37,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 export const firebaseService = {
+  // Tasks
   async getAllTasks(): Promise<any[]> {
     try {
       const snap = await getDocs(collection(db, 'tasks'));
@@ -71,6 +72,7 @@ export const firebaseService = {
     }
   },
 
+  // Users
   async getAllUsers(): Promise<any[]> {
     try {
       const snap = await getDocs(collection(db, 'users'));
@@ -95,6 +97,52 @@ export const firebaseService = {
     }
   },
 
+  async deleteUser(userId: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.DELETE, `users/${userId}`);
+      return false;
+    }
+  },
+
+  // Subjects
+  async getAllSubjects(): Promise<any[]> {
+    try {
+      const snap = await getDocs(collection(db, 'subjects'));
+      const subjects: any[] = [];
+      snap.forEach((docSnap) => {
+        subjects.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return subjects;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.LIST, 'subjects');
+      return [];
+    }
+  },
+
+  async saveSubject(subject: any): Promise<boolean> {
+    try {
+      await setDoc(doc(db, 'subjects', subject.id), subject, { merge: true });
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, `subjects/${subject.id}`);
+      return false;
+    }
+  },
+
+  async deleteSubject(subjectId: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'subjects', subjectId));
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.DELETE, `subjects/${subjectId}`);
+      return false;
+    }
+  },
+
+  // Announcements
   async getAllAnnouncements(): Promise<any[]> {
     try {
       const snap = await getDocs(collection(db, 'announcements'));
@@ -129,6 +177,7 @@ export const firebaseService = {
     }
   },
 
+  // Completions
   async getAllCompletions(): Promise<any[]> {
     try {
       const snap = await getDocs(collection(db, 'completions'));
@@ -150,6 +199,101 @@ export const firebaseService = {
       return true;
     } catch (e: any) {
       handleFirestoreError(e, OperationType.WRITE, `completions/${comp.user_id}_${comp.task_id}`);
+      return false;
+    }
+  },
+
+  async deleteCompletion(userId: string, taskId: string): Promise<boolean> {
+    try {
+      const compId = `${userId}_${taskId}`;
+      await deleteDoc(doc(db, 'completions', compId));
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.DELETE, `completions/${userId}_${taskId}`);
+      return false;
+    }
+  },
+
+  // Comments
+  async getAllComments(): Promise<any[]> {
+    try {
+      const snap = await getDocs(collection(db, 'comments'));
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.LIST, 'comments');
+      return [];
+    }
+  },
+
+  async saveComment(comment: any): Promise<boolean> {
+    try {
+      await setDoc(doc(db, 'comments', comment.id), comment, { merge: true });
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, `comments/${comment.id}`);
+      return false;
+    }
+  },
+
+  async deleteComment(commentId: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'comments', commentId));
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.DELETE, `comments/${commentId}`);
+      return false;
+    }
+  },
+
+  // System Settings / Config
+  async getSettings(id: string): Promise<any | null> {
+    try {
+      const snap = await getDoc(doc(db, 'settings', id));
+      if (snap.exists()) {
+        return snap.data();
+      }
+      return null;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.GET, `settings/${id}`);
+      return null;
+    }
+  },
+
+  async saveSettings(id: string, data: any): Promise<boolean> {
+    try {
+      await setDoc(doc(db, 'settings', id), data, { merge: true });
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, `settings/${id}`);
+      return false;
+    }
+  },
+
+  // Student Answers
+  async getAllStudentAnswers(): Promise<any[]> {
+    try {
+      const snap = await getDocs(collection(db, 'student_answers'));
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ key: docSnap.id, ...docSnap.data() });
+      });
+      return list;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.LIST, 'student_answers');
+      return [];
+    }
+  },
+
+  async saveStudentAnswer(key: string, data: any): Promise<boolean> {
+    try {
+      await setDoc(doc(db, 'student_answers', key), data, { merge: true });
+      return true;
+    } catch (e: any) {
+      handleFirestoreError(e, OperationType.WRITE, `student_answers/${key}`);
       return false;
     }
   }
