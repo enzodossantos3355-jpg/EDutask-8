@@ -1,19 +1,23 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 function initFirestore() {
-  if (firebaseConfig && firebaseConfig.firestoreDatabaseId) {
+  const dbId = (firebaseConfig && firebaseConfig.firestoreDatabaseId) || '(default)';
+  try {
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+    }, dbId);
+  } catch {
     try {
-      return getFirestore(app, firebaseConfig.firestoreDatabaseId);
-    } catch (err) {
-      console.warn('[Firebase] Falha ao conectar ao banco nomeado, usando (default):', err);
+      return getFirestore(app, dbId);
+    } catch {
+      return getFirestore(app);
     }
   }
-  return getFirestore(app);
 }
 
 export const db = initFirestore();

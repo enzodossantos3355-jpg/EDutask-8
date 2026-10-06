@@ -1,6 +1,41 @@
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): FirestoreErrorInfo {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: null,
+      email: null,
+      emailVerified: null,
+    },
+    operationType,
+    path,
+  };
+  console.error('Firestore Error:', JSON.stringify(errInfo));
+  return errInfo;
+}
+
 export const firebaseService = {
   async getAllTasks(): Promise<any[]> {
     try {
@@ -11,7 +46,7 @@ export const firebaseService = {
       });
       return tasks;
     } catch (e: any) {
-      console.warn('[Firebase] Erro ao buscar tarefas do Firestore:', e?.message || e);
+      handleFirestoreError(e, OperationType.LIST, 'tasks');
       return [];
     }
   },
@@ -21,7 +56,7 @@ export const firebaseService = {
       await setDoc(doc(db, 'tasks', task.id), task, { merge: true });
       return true;
     } catch (e: any) {
-      console.warn(`[Firebase] Erro ao salvar tarefa ${task.id} no Firestore:`, e?.message || e);
+      handleFirestoreError(e, OperationType.WRITE, `tasks/${task.id}`);
       return false;
     }
   },
@@ -31,7 +66,7 @@ export const firebaseService = {
       await deleteDoc(doc(db, 'tasks', taskId));
       return true;
     } catch (e: any) {
-      console.warn(`[Firebase] Erro ao remover tarefa ${taskId} do Firestore:`, e?.message || e);
+      handleFirestoreError(e, OperationType.DELETE, `tasks/${taskId}`);
       return false;
     }
   },
@@ -45,7 +80,7 @@ export const firebaseService = {
       });
       return users;
     } catch (e: any) {
-      console.warn('[Firebase] Erro ao buscar usuários do Firestore:', e?.message || e);
+      handleFirestoreError(e, OperationType.LIST, 'users');
       return [];
     }
   },
@@ -55,7 +90,7 @@ export const firebaseService = {
       await setDoc(doc(db, 'users', user.id), user, { merge: true });
       return true;
     } catch (e: any) {
-      console.warn(`[Firebase] Erro ao salvar usuário ${user.id}:`, e?.message || e);
+      handleFirestoreError(e, OperationType.WRITE, `users/${user.id}`);
       return false;
     }
   },
@@ -69,7 +104,7 @@ export const firebaseService = {
       });
       return list;
     } catch (e: any) {
-      console.warn('[Firebase] Erro ao buscar avisos:', e?.message || e);
+      handleFirestoreError(e, OperationType.LIST, 'announcements');
       return [];
     }
   },
@@ -79,7 +114,7 @@ export const firebaseService = {
       await setDoc(doc(db, 'announcements', ann.id), ann, { merge: true });
       return true;
     } catch (e: any) {
-      console.warn(`[Firebase] Erro ao salvar aviso ${ann.id}:`, e?.message || e);
+      handleFirestoreError(e, OperationType.WRITE, `announcements/${ann.id}`);
       return false;
     }
   },
@@ -89,7 +124,7 @@ export const firebaseService = {
       await deleteDoc(doc(db, 'announcements', annId));
       return true;
     } catch (e: any) {
-      console.warn(`[Firebase] Erro ao remover aviso ${annId}:`, e?.message || e);
+      handleFirestoreError(e, OperationType.DELETE, `announcements/${annId}`);
       return false;
     }
   },
@@ -103,7 +138,7 @@ export const firebaseService = {
       });
       return list;
     } catch (e: any) {
-      console.warn('[Firebase] Erro ao buscar entregas:', e?.message || e);
+      handleFirestoreError(e, OperationType.LIST, 'completions');
       return [];
     }
   },
@@ -114,7 +149,7 @@ export const firebaseService = {
       await setDoc(doc(db, 'completions', compId), { ...comp, id: compId }, { merge: true });
       return true;
     } catch (e: any) {
-      console.warn(`[Firebase] Erro ao salvar entrega:`, e?.message || e);
+      handleFirestoreError(e, OperationType.WRITE, `completions/${comp.user_id}_${comp.task_id}`);
       return false;
     }
   }
