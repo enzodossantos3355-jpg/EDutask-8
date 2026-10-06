@@ -3221,3 +3221,5 @@ async function startServer() {
 }
 
 startServer();
+
+export default app;
