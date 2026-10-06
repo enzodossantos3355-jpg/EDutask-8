@@ -1,0 +1,360 @@
+{
+  "users": [
+    [
+      "admin-user-001",
+      {
+        "id": "admin-user-001",
+        "email": "admin@escola.com",
+        "name": "Administrador",
+        "password_hash": "$2b$10$35a4o7KSxocE7WbKvtBGe.EWgHKzyFXbzk297sdebc.9eY8GVOOMi",
+        "password_plain": "enzo123cg",
+        "role": "admin",
+        "status": "active",
+        "points": 0,
+        "streak_count": 0,
+        "longest_streak": 0,
+        "owned_effects": [
+          "none",
+          "neon_pulse",
+          "sunset",
+          "golden",
+          "rainbow",
+          "ice",
+          "fire",
+          "hologram",
+          "galaxy",
+          "electric",
+          "shadow",
+          "phoenix",
+          "diamond"
+        ],
+        "equipped_effect": "none",
+        "created_at": "2026-10-05T21:37:08.294Z"
+      }
+    ],
+    [
+      "aluno-001",
+      {
+        "id": "aluno-001",
+        "email": "lucas.silva@escola.com",
+        "name": "Lucas Silva",
+        "password_hash": "$2b$10$BYu7TKW7XFt5.Idco261Nu.O7rb0UMRY2faVQhQ5AZE8SWBhb7VkS",
+        "password_plain": "123",
+        "role": "aluno",
+        "status": "active",
+        "points": 380,
+        "streak_count": 5,
+        "longest_streak": 7,
+        "last_active_date": "2026-10-05",
+        "owned_effects": [
+          "none",
+          "neon_pulse"
+        ],
+        "equipped_effect": "neon_pulse",
+        "created_at": "2026-10-05T21:37:08.388Z"
+      }
+    ],
+    [
+      "aluno-002",
+      {
+        "id": "aluno-002",
+        "email": "beatriz.costa@escola.com",
+        "name": "Beatriz Costa",
+        "password_hash": "$2b$10$BYu7TKW7XFt5.Idco261Nu.O7rb0UMRY2faVQhQ5AZE8SWBhb7VkS",
+        "password_plain": "123",
+        "role": "aluno",
+        "status": "active",
+        "points": 720,
+        "streak_count": 12,
+        "longest_streak": 15,
+        "last_active_date": "2026-10-05",
+        "owned_effects": [
+          "none",
+          "sunset"
+        ],
+        "equipped_effect": "sunset",
+        "created_at": "2026-10-05T21:37:08.388Z"
+      }
+    ],
+    [
+      "aluno-003",
+      {
+        "id": "aluno-003",
+        "email": "enzo.gabriel@escola.com",
+        "name": "Enzo Gabriel",
+        "password_hash": "$2b$10$BYu7TKW7XFt5.Idco261Nu.O7rb0UMRY2faVQhQ5AZE8SWBhb7VkS",
+        "password_plain": "123",
+        "role": "aluno",
+        "status": "active",
+        "points": 150,
+        "streak_count": 3,
+        "longest_streak": 4,
+        "last_active_date": "2026-10-05",
+        "owned_effects": [
+          "none",
+          "none"
+        ],
+        "equipped_effect": "none",
+        "created_at": "2026-10-05T21:37:08.388Z"
+      }
+    ],
+    [
+      "aluno-004",
+      {
+        "id": "aluno-004",
+        "email": "sofia.martins@escola.com",
+        "name": "Sofia Martins",
+        "password_hash": "$2b$10$BYu7TKW7XFt5.Idco261Nu.O7rb0UMRY2faVQhQ5AZE8SWBhb7VkS",
+        "password_plain": "123",
+        "role": "aluno",
+        "status": "active",
+        "points": 2100,
+        "streak_count": 24,
+        "longest_streak": 25,
+        "last_active_date": "2026-10-05",
+        "owned_effects": [
+          "none",
+          "golden"
+        ],
+        "equipped_effect": "golden",
+        "created_at": "2026-10-05T21:37:08.388Z"
+      }
+    ]
+  ],
+  "subjects": [
+    [
+      "subj-1",
+      {
+        "id": "subj-1",
+        "name": "Matemática"
+      }
+    ],
+    [
+      "subj-2",
+      {
+        "id": "subj-2",
+        "name": "Português"
+      }
+    ],
+    [
+      "subj-3",
+      {
+        "id": "subj-3",
+        "name": "Ciências"
+      }
+    ],
+    [
+      "subj-4",
+      {
+        "id": "subj-4",
+        "name": "História"
+      }
+    ],
+    [
+      "subj-5",
+      {
+        "id": "subj-5",
+        "name": "Geografia"
+      }
+    ],
+    [
+      "subj-6",
+      {
+        "id": "subj-6",
+        "name": "Inglês"
+      }
+    ],
+    [
+      "subj-7",
+      {
+        "id": "subj-7",
+        "name": "Artes"
+      }
+    ],
+    [
+      "subj-8",
+      {
+        "id": "subj-8",
+        "name": "Educação Física"
+      }
+    ]
+  ],
+  "tasks": [
+    [
+      "task-001",
+      {
+        "id": "task-001",
+        "title": "Exercícios de Frações e Porcentagem",
+        "description": "Resolver os exercícios das páginas 42 a 45 do livro didático. Apresentar os cálculos completos e destacar as respostas finais.",
+        "subject": "Matemática",
+        "due_date": "2026-10-06",
+        "points": 25,
+        "assigned_to": [],
+        "attachments": [],
+        "admin_photos": [
+          "file-1791243661839-tl79o"
+        ],
+        "answer": "",
+        "created_by": "admin-user-001",
+        "created_at": "2026-10-05T20:37:08.389Z",
+        "answer_source": ""
+      }
+    ],
+    [
+      "task-002",
+      {
+        "id": "task-002",
+        "title": "Relatório sobre o Ciclo da Água",
+        "description": "Escrever uma síntese de 2 a 3 parágrafos explicando os processos de evaporação, condensação, precipitação e infiltração na natureza.",
+        "subject": "Ciências",
+        "due_date": "2026-10-07",
+        "points": 20,
+        "assigned_to": [],
+        "attachments": [],
+        "admin_photos": [],
+        "answer": "O ciclo hidrológico compreende a evaporação das águas pela radiação solar, condensação em nuvens, precipitação em forma de chuva e infiltração no lençol freático.",
+        "created_by": "admin-user-001",
+        "created_at": "2026-10-05T19:37:08.389Z"
+      }
+    ],
+    [
+      "task-003",
+      {
+        "id": "task-003",
+        "title": "Resumo da Revolução Industrial",
+        "description": "Pesquisar os impactos sociais e econômicos da primeira Revolução Industrial no século XVIII, destacando o surgimento das máquinas a vapor.",
+        "subject": "História",
+        "due_date": "2026-10-08",
+        "points": 30,
+        "assigned_to": [],
+        "attachments": [],
+        "admin_photos": [],
+        "answer": "A Primeira Revolução Industrial (século XVIII, Inglaterra) transformou a produção manual em maquinofatura a vapor, acelerou a urbanização e deu origem ao proletariado.",
+        "created_by": "admin-user-001",
+        "created_at": "2026-10-05T18:37:08.389Z"
+      }
+    ]
+  ],
+  "completions": [
+    {
+      "task_id": "task-001",
+      "user_id": "aluno-004",
+      "completed_at": "2026-10-05T21:07:08.389Z",
+      "on_time": true,
+      "points_awarded": 25
+    }
+  ],
+  "announcements": [
+    [
+      "ann-002",
+      {
+        "id": "ann-002",
+        "title": "Aviso Especial da Coordenação Pedagógica 🌟",
+        "message": "Atenção estudantes: Esta semana teremos o início da rodada especial de avaliações e a contagem de pontualidade para a Premiação do Mês! Mantenham as entregas em dia para garantir a melhor classificação.",
+        "assigned_to": [],
+        "is_special": true,
+        "created_by": "admin-user-001",
+        "created_at": "2026-10-05T20:00:00.000Z"
+      }
+    ],
+    [
+      "ann-001",
+      {
+        "id": "ann-001",
+        "title": "Bem-vindos ao Edutask! 🚀",
+        "message": "Olá alunos e professores! Estamos com tudo pronto no Edutask. Não deixem de cumprir os prazos das tarefas, acumular pontos na Loja de Molduras e personalizar seus avatares com efeitos exclusivos!",
+        "assigned_to": [],
+        "is_special": false,
+        "created_by": "admin-user-001",
+        "created_at": "2026-10-04T21:37:08.389Z"
+      }
+    ]
+  ],
+  "comments": [
+    [
+      "comm-001",
+      {
+        "id": "comm-001",
+        "announcement_id": "ann-001",
+        "user_id": "aluno-001",
+        "user_name": "Lucas Silva",
+        "user_role": "aluno",
+        "text": "Muito animado com os novos efeitos visuais! Parabéns professor!",
+        "created_at": "2026-10-05T09:37:08.389Z"
+      }
+    ]
+  ],
+  "login_logs": [
+    {
+      "id": "log-1",
+      "user_id": "aluno-004",
+      "user_name": "Sofia Martins",
+      "role": "aluno",
+      "ip": "127.0.0.1",
+      "created_at": "2026-10-05T21:07:08.389Z"
+    },
+    {
+      "id": "log-2",
+      "user_id": "aluno-002",
+      "user_name": "Beatriz Costa",
+      "role": "aluno",
+      "ip": "127.0.0.1",
+      "created_at": "2026-10-05T20:37:08.389Z"
+    },
+    {
+      "id": "log-3",
+      "user_id": "aluno-001",
+      "user_name": "Lucas Silva",
+      "role": "aluno",
+      "ip": "127.0.0.1",
+      "created_at": "2026-10-05T20:07:08.389Z"
+    }
+  ],
+  "point_adjustments": [],
+  "effect_overrides": {},
+  "monthly_prize": {
+    "id": "monthly_prize",
+    "title": "Fone Bluetooth JBL Tune 520BT",
+    "description": "Avaliação mensal por IA! Os pontos de tarefas servem exclusivamente para a loja de molduras; o prêmio do mês é avaliado pela pontualidade e penalizado por tarefas não feitas.",
+    "emoji": "🎧",
+    "image_id": null,
+    "ai_winner": {
+      "winner_id": "aluno-004",
+      "winner_name": "Sofia Martins",
+      "score": 99,
+      "justification": "Sofia Martins destacou-se com 100% de entregas no prazo e nenhuma pendência no mês.",
+      "criteria": [
+        "100% de tarefas entregues no prazo",
+        "Zero pendências acumuladas"
+      ],
+      "awarded_at": "2026-10-05T20:00:00.000Z"
+    }
+  },
+  "task_cleanup_config": {
+    "enabled": true,
+    "cleanup_time": "23:59",
+    "days_after_due": 0,
+    "delete_only_if_completed": false,
+    "last_run_at": "2026-10-05T21:52:13.587Z",
+    "last_deleted_count": 1,
+    "last_deleted_titles": [
+      "[Matemática] Lição de Hoje para Limpeza"
+    ]
+  },
+  "app_info": {
+    "id": "app_info",
+    "version": "1.0.0",
+    "codename": "Neo-Brutalist Beta",
+    "release_notes": "Lançamento inicial do Edutask com controle de perfis, gamificação e painel admin.",
+    "features": [
+      "Perfis estilo Netflix para Alunos e Admin",
+      "Entrega de tarefas com anexos e prazos",
+      "Gabarito inteligente gerado por IA através de fotos da tarefa",
+      "Tira-dúvidas e tutor pedagógico com inteligência artificial",
+      "Gamificação com 7 Tiers, ofensivas diárias e loja de efeitos visuais",
+      "Prêmio mensal com ranking por pontualidade"
+    ]
+  },
+  "ai_enabled": true,
+  "task_student_answers": []
+}
